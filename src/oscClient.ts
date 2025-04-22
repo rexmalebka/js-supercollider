@@ -2,6 +2,7 @@ import * as osc from "osc";
 
 class OSCClient {
   public client: osc.UDPPort;
+  private ready: Promise<boolean>;
 
   constructor(opts?: {
     localAddress?: string;
@@ -19,28 +20,36 @@ class OSCClient {
       metadata: true,
     });
 
+    this.ready = new Promise((resolve, reject) => {
+      this.client.on("ready", () => {
+        setTimeout(() => {
+          resolve(true);
+        }, 10);
+      });
+      this.client.on("error", () => reject(false));
+    });
+
     this.client.open();
   }
 
-  waitReady(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const handler = () => {
-        this.client.off("ready", handler);
-        resolve();
-      };
+  async send(
+    msg: osc.OscMessage | osc.OscBundle,
+    timeout = 5000
+  ): Promise<void> {
+    console.log(msg["address"]);
+    if ((await this.ready) == false) return;
 
-      this.client.on("ready", handler);
-      this.client.on("error", reject);
-    });
-  }
-
-  async send(msg: osc.OscMessage): Promise<void> {
-    await this.waitReady();
     return new Promise((resolve, reject) => {
+      const timeId = setTimeout(() => {
+        reject(new Error(`send timeout`));
+      }, timeout);
+
       this.client.send(msg, (err) => {
         if (err) {
+          clearInterval(timeId);
           reject(err);
         } else {
+          clearInterval(timeId);
           resolve();
         }
       });
@@ -52,7 +61,7 @@ class OSCClient {
     expectedAddress: string[],
     timeout = 5000
   ): Promise<osc.OscMessage> {
-    await this.waitReady();
+    if ((await this.ready) == false) return;
 
     return new Promise((resolve, reject) => {
       const handler = (incoming: osc.OscMessage) => {

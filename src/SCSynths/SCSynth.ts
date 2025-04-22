@@ -1,7 +1,7 @@
 import { OscMessage, OscValue } from "osc";
 import OSCClient from "../oscClient";
 import { OSCClientOpts } from "../types/OSCClient";
-import type { Opts } from "../types/SCSynth";
+import { SCSynthOpts, SCSynthPosition } from "../types/SCSynth";
 
 class SCSynthNotFoundError extends Error {
   constructor(id: number) {
@@ -59,7 +59,7 @@ class SCSynth {
   public synthdef: string | null;
   public id: number | null;
 
-  constructor(opts: { synthdef?: string; id?: number }) {
+  constructor(opts: SCSynthOpts) {
     if (!opts.synthdef && !opts.id) {
       throw new SCSynthInvalidError();
     }
@@ -109,7 +109,7 @@ class SCSynth {
   }
 
   async set(
-    entries: { [name: string]: number | string } | number[],
+    params: { [name: string]: number | string } | number[],
     opts?: OSCClientOpts
   ): Promise<void> {
     if (!this.id) {
@@ -118,6 +118,36 @@ class SCSynth {
 
     const client = opts?.client ?? new OSCClient();
 
+    params = params ?? [];
+    const paramArgs: OscMessage["args"] = [];
+
+    if (Array.isArray(params)) {
+      params.forEach((param, index) => {
+        paramArgs.push(
+          {
+            type: "i",
+            value: index,
+          },
+          {
+            type: typeof param == "number" ? "f" : "s",
+            value: param,
+          }
+        );
+      });
+    } else {
+      Object.entries(params).forEach(([name, param]) => {
+        paramArgs.push(
+          {
+            type: "s",
+            value: name,
+          },
+          {
+            type: typeof param == "number" ? "f" : "s",
+            value: param,
+          }
+        );
+      });
+    }
     try {
       const msg = {
         address: "/n_set",
@@ -126,35 +156,116 @@ class SCSynth {
             type: "i",
             value: this.id,
           },
-          ...(Array.isArray(entries)
-            ? entries
-                .map((entry, index) => [
-                  {
-                    type: "i",
-                    value: index,
-                  },
-                  {
-                    type: typeof entry === "number" ? "f" : "s",
-                    value: entry,
-                  },
-                ])
-                .flat()
-            : Object.entries(entries)
-                .map(([param, value]) => [
-                  {
-                    type: typeof param === "number" ? "i" : "s",
-                    value: param,
-                  },
-                  {
-                    type: typeof value === "number" ? "f" : "s",
-                    value: value,
-                  },
-                ])
-                .flat()),
+          ...paramArgs,
         ],
       };
 
       await client.send(msg as OscMessage);
+    } finally {
+      if (!opts?.client) {
+        client.client.close();
+      }
+    }
+  }
+
+  async play(
+    params?: { [name: string]: number | string } | number[],
+    opts?: OSCClientOpts & SCSynthPosition
+  ): Promise<void> {
+    if (this.id != null) return;
+
+    const client = opts?.client ?? new OSCClient();
+
+    params = params ?? [];
+    const paramArgs: OscMessage["args"] = [];
+
+    if (Array.isArray(params)) {
+      params.forEach((param, index) => {
+        paramArgs.push(
+          {
+            type: "i",
+            value: index,
+          },
+          {
+            type: typeof param == "number" ? "f" : "s",
+            value: param,
+          }
+        );
+      });
+    } else {
+      Object.entries(params).forEach(([name, param]) => {
+        paramArgs.push(
+          {
+            type: "s",
+            value: name,
+          },
+          {
+            type: typeof param == "number" ? "f" : "s",
+            value: param,
+          }
+        );
+      });
+    }
+
+    try {
+      let synthId = 1000; // Start searching from this ID
+      let availableId: number | null = null;
+
+      while (true) {
+        const synth = await querySynth(synthId, { client });
+        if (synth === null) {
+          availableId = synthId;
+          break;
+        }
+        synthId++;
+      }
+
+      this.id = availableId;
+
+      await client.send({
+        address: "/s_new",
+        args: [
+          {
+            type: "s",
+            value: this.synthdef,
+          },
+          {
+            type: "i",
+            value: this.id,
+          },
+          {
+            type: "i",
+            value: 0,
+          },
+          {
+            type: "i",
+            value: 1,
+          },
+          ...paramArgs,
+        ],
+      });
+    } finally {
+      if (!opts?.client) {
+        client.client.close();
+      }
+    }
+  }
+
+  async free(opts?: OSCClientOpts): Promise<void> {
+    if (this.id == null) return;
+
+    const client = opts?.client ?? new OSCClient();
+
+    try {
+      await client.send({
+        address: "/n_free",
+        args: [
+          {
+            type: "i",
+            value: this.id,
+          },
+        ],
+      });
     } finally {
       if (!opts?.client) {
         client.client.close();

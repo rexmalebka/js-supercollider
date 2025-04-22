@@ -24,6 +24,25 @@ declare module "osc" {
   export interface OscValue {
     type: OscType;
     value: any;
+    // value: {
+    //   i: number;
+    //   f: number;
+    //   s: string;
+    //   b: any;
+    //   h: number;
+    //   t: any;
+    //   d: number;
+    //   S: string;
+    //   c: string;
+    //   r: any;
+    //   m: any;
+    //   T: true;
+    //   F: false;
+    //   N: any;
+    //   I: any;
+    //   "[": any;
+    //   "]": any;
+    // }[OscType];
   }
 
   export interface OscMessage {
@@ -32,7 +51,7 @@ declare module "osc" {
   }
 
   export interface OscBundle {
-    timetag: number;
+    timetag: number | { raw: number[] } | number[];
     packets: Array<OscMessage | OscBundle>;
   }
 
@@ -105,4 +124,7 @@ declare module "osc" {
     UDPPort: typeof UDPPort;
   };
   export default _default;
+
+  const timeTag : (t: number) => number[];
+  export timeTag typeof timeTag
 }

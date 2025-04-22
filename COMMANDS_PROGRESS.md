@@ -6,20 +6,20 @@ This file tracks implementation progress of OSC commands by difficulty and usage
 
 ## 🟢 Beginner – Core Commands
 
-| Command    | Description        | Implemented? | Notes                                |
-| ---------- | ------------------ | ------------ | ------------------------------------ |
-| `/status`  | Server status      | ✅           | `SCServer.status()`                  |
-| `/version` | Server version     | ✅           | `SCServer.version()`                 |
-| `/quit`    | Quit server        | ✅           | `SCServer.quit()`                    |
-| `/dumpOSC` | Dump OSC messages  | ✅           | `SCServer.dumpOSC()`                 |
-| `/s_get`   | Get Synth          | ✅           | `new SCSynth({id:111}).set({amp:2})` |
-| `/s_new`   | Create synth       | ⬜           |                                      |
-| `/n_set`   | Set control values | ✅           | `new SCSynth({id:111}).set({amp:2})` |
-| `/n_free`  | Free node          | ⬜           |                                      |
-| `/n_run`   | Pause/resume node  | ⬜           |                                      |
-| `/b_alloc` | Allocate buffer    | ⬜           |                                      |
-| `/b_free`  | Free buffer        | ⬜           |                                      |
-| `/b_zero`  | Zero buffer        | ⬜           |                                      |
+| Command    | Description        | Implemented? | Notes                                    |
+| ---------- | ------------------ | ------------ | ---------------------------------------- |
+| `/status`  | Server status      | ✅           | `SCServer.status()`                      |
+| `/version` | Server version     | ✅           | `SCServer.version()`                     |
+| `/quit`    | Quit server        | ✅           | `SCServer.quit()`                        |
+| `/dumpOSC` | Dump OSC messages  | ✅           | `SCServer.dumpOSC()`                     |
+| `/s_get`   | Get Synth          | ✅           | `new SCSynth({id:111}).set({amp:2})`     |
+| `/s_new`   | Create synth       | ✅           | `new SCSynth({synthdef: "drum"}).play()` |
+| `/n_set`   | Set control values | ✅           | `new SCSynth({id:111}).set({amp:2})`     |
+| `/n_free`  | Free node          | ✅           | `new SCSynth({id: 1001}).free()`         |
+| `/n_run`   | Pause/resume node  | ⬜           |                                          |
+| `/b_alloc` | Allocate buffer    | ⬜           |                                          |
+| `/b_free`  | Free buffer        | ⬜           |                                          |
+| `/b_zero`  | Zero buffer        | ⬜           |                                          |
 
 ---
 
