@@ -74,6 +74,12 @@ function readChildNode(args: (number | string)[]): {
   }
 }
 
+/**
+ * Queries the server for the complete node tree starting at the specified group
+ * @param groupId - The ID of the group to query
+ * @param opts - Options including optional custom OSC client
+ * @returns The complete node tree structure
+ */
 async function queryTree(
   groupId: number,
   opts?: OSCClientOpts
@@ -124,11 +130,27 @@ async function queryTree(
   }
 }
 
+/**
+ * Represents a SuperCollider group node for organizing synths and other groups hierarchically.
+ * Provides methods for creating, managing, and querying node hierarchies on the SuperCollider server.
+ *
+ * @example
+ * // Create and initialize a new group
+ * const group = await new SCGroup().init();
+ */
 class SCGroup {
+  /**
+   * The server-assigned ID of this group (null if not yet initialized)
+   */
   public id: number | null;
+
   private action: number;
   private target: number | SCSynth | SCGroup;
 
+  /**
+   * Creates a new SCGroup instance
+   * @param opts - Group configuration options
+   */
   constructor(opts?: SCGroupOpts) {
     this.id = opts?.id ?? null;
     this.action =
@@ -165,6 +187,13 @@ class SCGroup {
     }
   }
 
+  /**
+   * Initializes the group on the SuperCollider server
+   * @param opts - Initialization options including positioning
+   * @returns The initialized group instance
+   * @example
+   * await group.init({ after: targetGroup });
+   */
   async init(opts?: OSCClientOpts & SCPosition): Promise<SCGroup> {
     if (this.id != null) return this;
 
@@ -251,6 +280,10 @@ class SCGroup {
     return this;
   }
 
+  /**
+   * Removes this group from the server
+   * @param opts - Options including optional custom OSC client
+   */
   async free(opts?: OSCClientOpts): Promise<void> {
     if (this.id == null) return null;
 
@@ -275,6 +308,10 @@ class SCGroup {
     }
   }
 
+  /**
+   * Removes all child nodes from this group while keeping the group itself
+   * @param opts - Options including optional custom OSC client
+   */
   async freeAll(opts?: OSCClientOpts): Promise<void> {
     if (this.id == null) return null;
 
@@ -297,6 +334,11 @@ class SCGroup {
     }
   }
 
+  /**
+   * Adds nodes to this group with specified positioning
+   * @param opts - Configuration including nodes to add and their position
+   * @returns This group instance for chaining
+   */
   async add(opts?: OSCClientOpts & SCPosition): Promise<SCGroup> {
     if (this.id == null) return this;
 
@@ -373,6 +415,11 @@ class SCGroup {
     }
   }
 
+  /**
+   * Adds nodes at the head of this group (convenience method)
+   * @param nodes - Array of nodes or node IDs to add
+   * @param opts - Options including optional custom OSC client
+   */
   async addHead(nodes: (SCSynth | SCGroup | number)[], opts?: OSCClientOpts) {
     return this.add({
       head: nodes,
@@ -380,13 +427,22 @@ class SCGroup {
     });
   }
 
+  /**
+   * Adds nodes at the tail of this group (convenience method)
+   * @param nodes - Array of nodes or node IDs to add
+   * @param opts - Options including optional custom OSC client
+   */
   async addTail(nodes: (SCSynth | SCGroup | number)[], opts?: OSCClientOpts) {
     return this.add({
       tail: nodes,
       client: opts?.client,
     });
   }
-
+  /**
+   * Adds nodes before this group (convenience method)
+   * @param nodes - Array of nodes or node IDs to add
+   * @param opts - Options including optional custom OSC client
+   */
   async addBefore(nodes: (SCSynth | SCGroup | number)[], opts?: OSCClientOpts) {
     return this.add({
       before: nodes,
@@ -394,6 +450,11 @@ class SCGroup {
     });
   }
 
+  /**
+   * Adds nodes after this group (convenience method)
+   * @param nodes - Array of nodes or node IDs to add
+   * @param opts - Options including optional custom OSC client
+   */
   async addAfter(nodes: (SCSynth | SCGroup | number)[], opts?: OSCClientOpts) {
     return this.add({
       after: nodes,
@@ -401,6 +462,11 @@ class SCGroup {
     });
   }
 
+  /**
+   * Retrieves all child nodes of this group
+   * @param opts - Options including optional custom OSC client
+   * @returns Array of child nodes (both SCGroup and SCSynth instances)
+   */
   async nodes(opts?: OSCClientOpts): Promise<(SCGroup | SCSynth)[]> {
     if (this.id == null) return [];
 
