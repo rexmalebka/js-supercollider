@@ -1,3 +1,4 @@
+import { SCGroup } from "../SCGroups/SCGroups";
 import { SCSynth } from "../SCSynths/SCSynth";
 
 export interface SynthNode {
@@ -17,21 +18,21 @@ export type Node = SynthNode | GroupNode;
 
 export type SCGroupOpts = {
   id?: number;
-} & SCGroupPosition;
+} & SCPosition;
 
-export type SCGroupPosition =
+export type SCPosition =
   | {
-      head?: number | SCGroupOpts | SCSynth;
+      head?: (number | SCGroup | SCSynth)[];
     }
   | {
-      tail?: number | SCGroupOpts | SCSynth;
+      tail?: (number | SCGroup | SCSynth)[];
     }
   | {
-      before?: number | SCGroupOpts | SCSynth;
+      before?: (number | SCGroup | SCSynth)[];
     }
   | {
-      after?: number | SCGroupOpts | SCSynth;
+      after?: (number | SCGroup | SCSynth)[];
     }
   | {
-      replace?: number | SCGroupOpts | SCSynth;
+      replace?: number | SCGroup | SCSynth;
     };

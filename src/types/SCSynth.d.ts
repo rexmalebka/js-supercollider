@@ -1,21 +1,26 @@
+import { SCGroup } from "../SCGroups/SCGroups";
+import { SCSynth } from "../SCSynths/SCSynth";
+
 export type SCSynthOpts = {
   synthdef?: string;
   id?: number;
 };
 
-export type SCSynthPosition =
+
+
+export type SCPosition =
   | {
-      head: number;
+      head?: number | SCGroup | SCSynth;
     }
   | {
-      tail: number;
+      tail?: number | SCGroup | SCSynth;
     }
   | {
-      before: number;
+      before?: number | SCGroup | SCSynth;
     }
   | {
-      after: number;
+      after?: number | SCGroup | SCSynth;
     }
   | {
-      replace: number;
+      replace?: number | SCGroup | SCSynth;
     };
