@@ -1,4 +1,4 @@
-import { OscValue } from "osc";
+import { OscMessage, OscValue } from "osc";
 import OSCClient from "../oscClient";
 import { OSCClientOpts } from "../types/OSCClient";
 import {
@@ -127,34 +127,34 @@ async function queryTree(
 class SCGroup {
   public id: number | null;
   private action: number;
-  private target: number | Node;
+  private target: number | SCSynth | SCGroup;
 
-  constructor(Opts?: SCGroupOpts) {
-    this.id = Opts?.id ?? null;
+  constructor(opts?: SCGroupOpts) {
+    this.id = opts?.id ?? null;
     this.action =
-      "head" in (Opts ?? {})
+      "head" in (opts ?? {})
         ? 0
-        : "tail" in (Opts ?? {})
+        : "tail" in (opts ?? {})
         ? 1
-        : "before" in (Opts ?? {})
+        : "before" in (opts ?? {})
         ? 2
-        : "after" in (Opts ?? {})
+        : "after" in (opts ?? {})
         ? 3
-        : "replace" in (Opts ?? {})
+        : "replace" in (opts ?? {})
         ? 4
         : 0;
 
     this.target =
-      "head" in (Opts ?? {})
-        ? Opts["head"]
-        : "tail" in (Opts ?? {})
-        ? Opts["tail"]
-        : "before" in (Opts ?? {})
-        ? Opts["before"]
-        : "after" in (Opts ?? {})
-        ? Opts["after"]
-        : "replace" in (Opts ?? {})
-        ? Opts["replace"]
+      "head" in (opts ?? {})
+        ? opts["head"]
+        : "tail" in (opts ?? {})
+        ? opts["tail"]
+        : "before" in (opts ?? {})
+        ? opts["before"]
+        : "after" in (opts ?? {})
+        ? opts["after"]
+        : "replace" in (opts ?? {})
+        ? opts["replace"]
         : 0;
 
     if (
@@ -165,8 +165,37 @@ class SCGroup {
     }
   }
 
-  async init(opts?: OSCClientOpts) {
+  async init(opts?: OSCClientOpts & SCGroupPosition) {
+    if (this.id != null) return;
+
     const client = opts?.client ?? new OSCClient();
+
+    this.action =
+      "head" in (opts ?? {})
+        ? 0
+        : "tail" in (opts ?? {})
+        ? 1
+        : "before" in (opts ?? {})
+        ? 2
+        : "after" in (opts ?? {})
+        ? 3
+        : "replace" in (opts ?? {})
+        ? 4
+        : 0;
+
+    this.target =
+      "head" in (opts ?? {})
+        ? opts["head"]
+        : "tail" in (opts ?? {})
+        ? opts["tail"]
+        : "before" in (opts ?? {})
+        ? opts["before"]
+        : "after" in (opts ?? {})
+        ? opts["after"]
+        : "replace" in (opts ?? {})
+        ? opts["replace"]
+        : 0;
+
     try {
       const group0 = await queryTree(0, { client });
       let nodes = group0.nodes;
@@ -237,6 +266,102 @@ class SCGroup {
       });
 
       this.id = null;
+    } finally {
+      if (!opts?.client) {
+        client.client.close();
+      }
+    }
+  }
+
+  async add(opts?: OSCClientOpts & SCGroupPosition) {
+    if (this.id == null) return null;
+
+    if (
+      !("head" in opts) &&
+      !("tail" in opts) &&
+      !("before" in opts) &&
+      !("after" in opts)
+    )
+      return null;
+
+    this.action =
+      "head" in (opts ?? {})
+        ? 0
+        : "tail" in (opts ?? {})
+        ? 1
+        : "before" in (opts ?? {})
+        ? 2
+        : "after" in (opts ?? {})
+        ? 3
+        : 0;
+
+    this.target =
+      "head" in (opts ?? {})
+        ? (opts["head"] as SCSynth | SCGroup)
+        : "tail" in (opts ?? {})
+        ? (opts["tail"] as SCSynth | SCGroup)
+        : "before" in (opts ?? {})
+        ? (opts["before"] as SCSynth | SCGroup)
+        : "after" in (opts ?? {})
+        ? (opts["after"] as SCSynth | SCGroup)
+        : 0;
+
+    const client = opts?.client ?? new OSCClient();
+
+    const address =
+      this.action == 0
+        ? "/g_tail"
+        : this.action == 1
+        ? "/g_head"
+        : this.action == 2
+        ? "/n_before"
+        : this.action == 3
+        ? "/n_after"
+        : "/n_before";
+
+    const target_id =
+      this.target instanceof SCGroup || this.target instanceof SCSynth
+        ? this.target.id
+        : this.target;
+
+    const args: OscMessage["args"] =
+      address in ["/g_tail", "/g_head"]
+        ? [
+            {
+              type: "i",
+              value: this.id,
+            },
+            {
+              type: "i",
+              value: target_id,
+            },
+          ]
+        : [
+            {
+              type: "i",
+              value: target_id,
+            },
+            {
+              type: "i",
+              value: this.id,
+            },
+          ];
+
+    try {
+      if (target_id != null) {
+        await client.send({
+          address,
+          args,
+        });
+      } else {
+        console.log("AAAAAAAAA", this.action, [
+          ["head", "tail", "before", "after"][this.action] ?? "before",
+        ]);
+        (this.target as SCSynth | SCGroup).init({
+          [["head", "tail", "before", "after"][this.action] ?? "before"]:
+            this.id,
+        });
+      }
     } finally {
       if (!opts?.client) {
         client.client.close();

@@ -59,14 +59,21 @@ const querySynth = async function (
 class SCSynth {
   public synthdef: string | null;
   public id: number | null;
+  private params: { [name: string]: number | string } | number[];
 
-  constructor(opts: SCSynthOpts & SCGroupPosition) {
+  constructor(
+    opts: SCSynthOpts &
+      SCGroupPosition & {
+        params?: { [name: string]: number | string } | number[];
+      }
+  ) {
     if (!opts.synthdef && !opts.id) {
       throw new SCSynthInvalidError();
     }
 
     this.synthdef = opts.synthdef ?? null;
     this.id = opts.id ?? null;
+    this.params = opts.params ?? {};
   }
 
   async get(
@@ -169,15 +176,16 @@ class SCSynth {
     }
   }
 
-  async play(
-    params?: { [name: string]: number | string } | number[],
-    opts?: OSCClientOpts
+  async init(
+    opts?: OSCClientOpts & {
+      params?: { [name: string]: number | string } | number[];
+    }
   ): Promise<void> {
     if (this.id != null) return;
 
     const client = opts?.client ?? new OSCClient();
 
-    params = params ?? [];
+    const params = opts.params ?? [];
     const paramArgs: OscMessage["args"] = [];
 
     if (Array.isArray(params)) {
