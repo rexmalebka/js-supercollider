@@ -75,6 +75,6 @@ See full OSC command progress in [COMMANDS_PROGRESS.md](./COMMANDS_PROGRESS.md)
 ---
 
 ## 📂 Docs & Links
-
+- See [Core Concepts](/docs/concepts.md) for Supercollider basics.  
 - [SuperCollider Server Commands](https://doc.sccode.org/Reference/Server-Command-Reference.html)
 - [SynthDef Binary Format](https://doc.sccode.org/Reference/Synth-Definition-File-Format.html)

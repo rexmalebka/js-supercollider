@@ -1,7 +1,8 @@
 import { OscMessage, OscValue } from "osc";
 import OSCClient from "../oscClient";
 import { OSCClientOpts } from "../types/OSCClient";
-import { SCSynthOpts, SCSynthPosition } from "../types/SCSynth";
+import { SCSynthOpts } from "../types/SCSynth";
+import { SCGroupPosition } from "../types/SCGroups";
 
 class SCSynthNotFoundError extends Error {
   constructor(id: number) {
@@ -59,7 +60,7 @@ class SCSynth {
   public synthdef: string | null;
   public id: number | null;
 
-  constructor(opts: SCSynthOpts) {
+  constructor(opts: SCSynthOpts & SCGroupPosition) {
     if (!opts.synthdef && !opts.id) {
       throw new SCSynthInvalidError();
     }
@@ -170,7 +171,7 @@ class SCSynth {
 
   async play(
     params?: { [name: string]: number | string } | number[],
-    opts?: OSCClientOpts & SCSynthPosition
+    opts?: OSCClientOpts
   ): Promise<void> {
     if (this.id != null) return;
 
@@ -274,7 +275,4 @@ class SCSynth {
   }
 }
 
-export default {
-  querySynth,
-  SCSynth,
-};
+export { querySynth, SCSynth };

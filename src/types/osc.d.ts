@@ -124,7 +124,4 @@ declare module "osc" {
     UDPPort: typeof UDPPort;
   };
   export default _default;
-
-  const timeTag : (t: number) => number[];
-  export timeTag typeof timeTag
 }

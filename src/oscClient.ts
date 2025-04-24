@@ -36,7 +36,6 @@ class OSCClient {
     msg: osc.OscMessage | osc.OscBundle,
     timeout = 5000
   ): Promise<void> {
-    console.log(msg["address"]);
     if ((await this.ready) == false) return;
 
     return new Promise((resolve, reject) => {

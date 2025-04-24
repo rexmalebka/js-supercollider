@@ -25,22 +25,22 @@ This file tracks implementation progress of OSC commands by difficulty and usage
 
 ## 🟡 Intermediate – Groups, Buffers, Queries
 
-| Command             | Description              | Implemented? | Notes |
-| ------------------- | ------------------------ | ------------ | ----- |
-| `/g_new`            | Create group             | ⬜           |       |
-| `/g_head`           | Add node to head         | ⬜           |       |
-| `/g_tail`           | Add node to tail         | ⬜           |       |
-| `/n_before`         | Move node before another | ⬜           |       |
-| `/g_freeAll`        | Free all in group        | ⬜           |       |
-| `/g_deepFree`       | Free group & subnodes    | ⬜           |       |
-| `/b_read`           | Read file into buffer    | ⬜           |       |
-| `/b_write`          | Write buffer to file     | ⬜           |       |
-| `/b_set`, `/b_setn` | Set buffer samples       | ⬜           |       |
-| `/b_get`, `/b_getn` | Get buffer samples       | ⬜           |       |
-| `/g_dumpTree`       | Dump node tree           | ⬜           |       |
-| `/g_queryTree`      | Query node tree          | ⬜           |       |
-| `/n_trace`          | Trace node execution     | ⬜           |       |
-| `/n_query`          | Query node               | ⬜           |       |
+| Command             | Description              | Implemented? | Notes           |
+| ------------------- | ------------------------ | ------------ | --------------- |
+| `/g_new`            | Create group             | ✅           | `new SCGroup()` |
+| `/g_head`           | Add node to head         | ⬜           |                 |
+| `/g_tail`           | Add node to tail         | ⬜           |                 |
+| `/n_before`         | Move node before another | ⬜           |                 |
+| `/g_freeAll`        | Free all in group        | ⬜           |                 |
+| `/g_deepFree`       | Free group & subnodes    | ⬜           |                 |
+| `/b_read`           | Read file into buffer    | ⬜           |                 |
+| `/b_write`          | Write buffer to file     | ⬜           |                 |
+| `/b_set`, `/b_setn` | Set buffer samples       | ⬜           |                 |
+| `/b_get`, `/b_getn` | Get buffer samples       | ⬜           |                 |
+| `/g_dumpTree`       | Dump node tree           | ⬜           |                 |
+| `/g_queryTree`      | Query node tree          | ⬜           |                 |
+| `/n_trace`          | Trace node execution     | ⬜           |                 |
+| `/n_query`          | Query node               | ⬜           |                 |
 
 ---
 
