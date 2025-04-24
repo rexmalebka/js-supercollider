@@ -1,8 +1,8 @@
 import { OscMessage, OscValue } from "osc";
 import OSCClient from "../oscClient";
 import { OSCClientOpts } from "../types/OSCClient";
-import { SCSynthOpts } from "../types/SCSynth";
-import { SCGroupPosition } from "../types/SCGroups";
+import { SCPosition, SCSynthOpts } from "../types/SCSynth";
+import { SCGroup } from "../SCGroups/SCGroups";
 
 class SCSynthNotFoundError extends Error {
   constructor(id: number) {
@@ -60,10 +60,12 @@ class SCSynth {
   public synthdef: string | null;
   public id: number | null;
   private params: { [name: string]: number | string } | number[];
+  private action: number;
+  private target: number | SCSynth | SCGroup;
 
   constructor(
     opts: SCSynthOpts &
-      SCGroupPosition & {
+      SCPosition & {
         params?: { [name: string]: number | string } | number[];
       }
   ) {
@@ -73,6 +75,39 @@ class SCSynth {
 
     this.synthdef = opts.synthdef ?? null;
     this.id = opts.id ?? null;
+    this.action =
+      "head" in (opts ?? {})
+        ? 0
+        : "tail" in (opts ?? {})
+        ? 1
+        : "before" in (opts ?? {})
+        ? 2
+        : "after" in (opts ?? {})
+        ? 3
+        : "replace" in (opts ?? {})
+        ? 4
+        : 0;
+
+    this.target =
+      "head" in (opts ?? {})
+        ? opts["head"]
+        : "tail" in (opts ?? {})
+        ? opts["tail"]
+        : "before" in (opts ?? {})
+        ? opts["before"]
+        : "after" in (opts ?? {})
+        ? opts["after"]
+        : "replace" in (opts ?? {})
+        ? opts["replace"]
+        : 0;
+
+    if (
+      (this.target instanceof SCGroup || this.target instanceof SCSynth) &&
+      this.target.id == null
+    ) {
+      throw new Error("Target node have no id assigned");
+    }
+
     this.params = opts.params ?? {};
   }
 
@@ -179,13 +214,39 @@ class SCSynth {
   async init(
     opts?: OSCClientOpts & {
       params?: { [name: string]: number | string } | number[];
-    }
-  ): Promise<void> {
-    if (this.id != null) return;
+    } & SCPosition
+  ): Promise<SCSynth> {
+    if (this.id != null) return this;
 
     const client = opts?.client ?? new OSCClient();
 
-    const params = opts.params ?? [];
+    this.action =
+      "head" in (opts ?? {})
+        ? 0
+        : "tail" in (opts ?? {})
+        ? 1
+        : "before" in (opts ?? {})
+        ? 2
+        : "after" in (opts ?? {})
+        ? 3
+        : "replace" in (opts ?? {})
+        ? 4
+        : 0;
+
+    this.target =
+      "head" in (opts ?? {})
+        ? opts["head"]
+        : "tail" in (opts ?? {})
+        ? opts["tail"]
+        : "before" in (opts ?? {})
+        ? opts["before"]
+        : "after" in (opts ?? {})
+        ? opts["after"]
+        : "replace" in (opts ?? {})
+        ? opts["replace"]
+        : 0;
+
+    const params = opts?.params ?? [];
     const paramArgs: OscMessage["args"] = [];
 
     if (Array.isArray(params)) {
@@ -231,6 +292,11 @@ class SCSynth {
 
       this.id = availableId;
 
+      const target_id =
+        this.target instanceof SCGroup || this.target instanceof SCSynth
+          ? this.target.id
+          : this.target;
+
       await client.send({
         address: "/s_new",
         args: [
@@ -244,11 +310,11 @@ class SCSynth {
           },
           {
             type: "i",
-            value: 0,
+            value: this.action,
           },
           {
             type: "i",
-            value: 1,
+            value: target_id,
           },
           ...paramArgs,
         ],
@@ -258,6 +324,7 @@ class SCSynth {
         client.client.close();
       }
     }
+    return this;
   }
 
   async free(opts?: OSCClientOpts): Promise<void> {

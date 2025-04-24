@@ -6,7 +6,7 @@ import {
   SynthNode,
   Node,
   SCGroupOpts,
-  SCGroupPosition,
+  SCPosition,
 } from "../types/SCGroups";
 import { SCSynth } from "../SCSynths/SCSynth";
 
@@ -165,8 +165,8 @@ class SCGroup {
     }
   }
 
-  async init(opts?: OSCClientOpts & SCGroupPosition) {
-    if (this.id != null) return;
+  async init(opts?: OSCClientOpts & SCPosition): Promise<SCGroup> {
+    if (this.id != null) return this;
 
     const client = opts?.client ?? new OSCClient();
 
@@ -217,6 +217,11 @@ class SCGroup {
 
       this.id = groupId + 1;
 
+      const target_id =
+        this.target instanceof SCGroup || this.target instanceof SCSynth
+          ? this.target.id
+          : this.target;
+
       await client.send({
         address: "/g_new",
         args: [
@@ -230,10 +235,7 @@ class SCGroup {
           },
           {
             type: "i",
-            value:
-              this.target instanceof SCGroup || this.target instanceof SCSynth
-                ? this.target.id
-                : this.target,
+            value: target_id,
           },
         ],
       });
@@ -273,8 +275,30 @@ class SCGroup {
     }
   }
 
-  async add(opts?: OSCClientOpts & SCGroupPosition) {
+  async freeAll(opts?: OSCClientOpts): Promise<void> {
     if (this.id == null) return null;
+
+    const client = opts?.client ?? new OSCClient();
+
+    try {
+      await client.send({
+        address: "/g_freeAll",
+        args: [
+          {
+            type: "i",
+            value: this.id,
+          },
+        ],
+      });
+    } finally {
+      if (!opts?.client) {
+        client.client.close();
+      }
+    }
+  }
+
+  async add(opts?: OSCClientOpts & SCPosition): Promise<SCGroup> {
+    if (this.id == null) return this;
 
     if (
       !("head" in opts) &&
@@ -284,7 +308,7 @@ class SCGroup {
     )
       return null;
 
-    this.action =
+    const action =
       "head" in (opts ?? {})
         ? 0
         : "tail" in (opts ?? {})
@@ -295,78 +319,86 @@ class SCGroup {
         ? 3
         : 0;
 
-    this.target =
+    const targets =
       "head" in (opts ?? {})
-        ? (opts["head"] as SCSynth | SCGroup)
+        ? (opts["head"] as (SCSynth | SCGroup | number)[])
         : "tail" in (opts ?? {})
-        ? (opts["tail"] as SCSynth | SCGroup)
+        ? (opts["tail"] as (SCSynth | SCGroup | number)[])
         : "before" in (opts ?? {})
-        ? (opts["before"] as SCSynth | SCGroup)
+        ? (opts["before"] as (SCSynth | SCGroup | number)[])
         : "after" in (opts ?? {})
-        ? (opts["after"] as SCSynth | SCGroup)
-        : 0;
+        ? (opts["after"] as (SCSynth | SCGroup | number)[])
+        : [];
 
     const client = opts?.client ?? new OSCClient();
 
-    const address =
-      this.action == 0
-        ? "/g_tail"
-        : this.action == 1
-        ? "/g_head"
-        : this.action == 2
-        ? "/n_before"
-        : this.action == 3
-        ? "/n_after"
-        : "/n_before";
-
-    const target_id =
-      this.target instanceof SCGroup || this.target instanceof SCSynth
-        ? this.target.id
-        : this.target;
-
-    const args: OscMessage["args"] =
-      address in ["/g_tail", "/g_head"]
-        ? [
-            {
-              type: "i",
-              value: this.id,
-            },
-            {
-              type: "i",
-              value: target_id,
-            },
-          ]
-        : [
-            {
-              type: "i",
-              value: target_id,
-            },
-            {
-              type: "i",
-              value: this.id,
-            },
-          ];
-
     try {
-      if (target_id != null) {
-        await client.send({
-          address,
-          args,
-        });
-      } else {
-        console.log("AAAAAAAAA", this.action, [
-          ["head", "tail", "before", "after"][this.action] ?? "before",
-        ]);
-        (this.target as SCSynth | SCGroup).init({
-          [["head", "tail", "before", "after"][this.action] ?? "before"]:
-            this.id,
-        });
+      let nodes: (SCGroup | SCSynth | number)[] = [];
+
+      for (let target of targets) {
+        if (
+          (target instanceof SCSynth || target instanceof SCGroup) &&
+          target.id == null
+        ) {
+          nodes.push(await target.init({ client }));
+        } else {
+          nodes.push(target);
+        }
       }
+
+      await client.send({
+        address: "/n_order",
+        args: [
+          {
+            type: "i",
+            value: action,
+          },
+          {
+            type: "i",
+            value: this.id,
+          },
+          ...(nodes.map((node) => ({
+            type: "i",
+            value:
+              node instanceof SCGroup || node instanceof SCSynth
+                ? node.id
+                : node,
+          })) as OscMessage["args"]),
+        ],
+      });
     } finally {
       if (!opts?.client) {
         client.client.close();
       }
     }
+  }
+
+  async addHead(nodes: (SCSynth | SCGroup | number)[], opts?: OSCClientOpts) {
+    return this.add({
+      head: nodes,
+      client: opts?.client,
+    });
+  }
+
+  async addTail(nodes: (SCSynth | SCGroup | number)[], opts?: OSCClientOpts) {
+    return this.add({
+      tail: nodes,
+      client: opts?.client,
+    });
+  }
+
+  async addBefore(nodes: (SCSynth | SCGroup | number)[], opts?: OSCClientOpts) {
+    return this.add({
+      before: nodes,
+      client: opts?.client,
+    });
+  }
+
+  async addAfter(nodes: (SCSynth | SCGroup | number)[], opts?: OSCClientOpts) {
+    return this.add({
+      after: nodes,
+      client: opts?.client,
+    });
   }
 
   async nodes(opts?: OSCClientOpts): Promise<(SCGroup | SCSynth)[]> {
