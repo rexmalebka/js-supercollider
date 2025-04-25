@@ -4,6 +4,11 @@ import { OSCClientOpts } from "../types/OSCClient";
 import { SCPosition, SCSynthOpts } from "../types/SCSynth";
 import { SCGroup } from "../SCGroups/SCGroups";
 
+/**
+ * Error thrown when a referenced synth cannot be found on the server
+ * @class SCSynthNotFoundError
+ * @extends Error
+ */
 class SCSynthNotFoundError extends Error {
   constructor(id: number) {
     super(`Synth ${id} not found`);
@@ -11,6 +16,11 @@ class SCSynthNotFoundError extends Error {
   }
 }
 
+/**
+ * Error thrown when synth creation is attempted without required parameters
+ * @class SCSynthInvalidError
+ * @extends Error
+ */
 class SCSynthInvalidError extends Error {
   constructor() {
     super("Invalid synth, an id or synthdef must be provided");
@@ -18,6 +28,15 @@ class SCSynthInvalidError extends Error {
   }
 }
 
+/**
+ * Queries the server for a synth by ID
+ * @async
+ * @function querySynth
+ * @param {number} id - The synth ID to query
+ * @param {Object} [opts] - Options
+ * @param {OSCClient} [opts.client] - Custom OSC client
+ * @returns {Promise<SCSynth|null>} The found synth or null if not found
+ */
 const querySynth = async function (
   id: number,
   opts?: OSCClientOpts
@@ -56,13 +75,46 @@ const querySynth = async function (
   }
 };
 
+/**
+ * Represents a SuperCollider synth node
+ * @class SCSynth
+ * @example
+ * // Create a new sine wave synth
+ * const synth = new SCSynth({ synthdef: 'sine' });
+ * await synth.init({ freq: 440, amp: 0.5 });
+ */
 class SCSynth {
+  /**
+   * The synth definition name
+   * @type {?string}
+   * @public
+   */
   public synthdef: string | null;
+  /**
+   * The server-assigned synth ID
+   * @type {?number}
+   * @public
+   */
   public id: number | null;
   private params: { [name: string]: number | string } | number[];
   private action: number;
   private target: number | SCSynth | SCGroup;
 
+  /**
+   * Creates a new SCSynth instance
+   * @constructor
+   * @param {Object} opts - Configuration options
+   * @param {string} [opts.synthdef] - Synth definition name
+   * @param {number} [opts.id] - Existing synth ID to reference
+   * @param {Object|Array} [opts.params] - Initial parameters
+   * @param {number|SCSynth|SCGroup} [opts.head] - Add at head of target
+   * @param {number|SCSynth|SCGroup} [opts.tail] - Add at tail of target
+   * @param {number|SCSynth|SCGroup} [opts.before] - Add before target
+   * @param {number|SCSynth|SCGroup} [opts.after] - Add after target
+   * @param {number|SCSynth|SCGroup} [opts.replace] - Replace target
+   * @throws {SCSynthInvalidError} If neither synthdef nor id is provided
+   * @throws {Error} If target node has no ID assigned
+   */
   constructor(
     opts: SCSynthOpts &
       SCPosition & {
@@ -111,6 +163,15 @@ class SCSynth {
     this.params = opts.params ?? {};
   }
 
+  /**
+   * Gets a synth parameter value from the server
+   * @async
+   * @method get
+   * @param {number|string} property - The parameter name or index
+   * @param {Object} [opts] - Options
+   * @param {OSCClient} [opts.client] - Custom OSC client
+   * @returns {Promise<string|number|null>} The parameter value
+   */
   async get(
     property: number | string,
     opts?: OSCClientOpts
@@ -151,6 +212,21 @@ class SCSynth {
     }
   }
 
+  /**
+   * Sets synth parameters on the server
+   * @async
+   * @method set
+   * @param {Object|Array} params - Parameters to set (name-value pairs or array)
+   * @param {Object} [opts] - Options
+   * @param {OSCClient} [opts.client] - Custom OSC client
+   * @returns {Promise<void>}
+   * @example
+   * // Set parameters by name
+   * await synth.set({ freq: 880, amp: 0.3 });
+   *
+   * // Set parameters by index
+   * await synth.set([440, 0.5]);
+   */
   async set(
     params: { [name: string]: number | string } | number[],
     opts?: OSCClientOpts
@@ -211,6 +287,20 @@ class SCSynth {
     }
   }
 
+  /**
+   * Initializes the synth on the server
+   * @async
+   * @method init
+   * @param {Object} [opts] - Initialization options
+   * @param {OSCClient} [opts.client] - Custom OSC client
+   * @param {Object|Array} [opts.params] - Initial parameters
+   * @param {number|SCSynth|SCGroup} [opts.head] - Add at head of target
+   * @param {number|SCSynth|SCGroup} [opts.tail] - Add at tail of target
+   * @param {number|SCSynth|SCGroup} [opts.before] - Add before target
+   * @param {number|SCSynth|SCGroup} [opts.after] - Add after target
+   * @param {number|SCSynth|SCGroup} [opts.replace] - Replace target
+   * @returns {Promise<SCSynth>} The initialized synth
+   */
   async init(
     opts?: OSCClientOpts & {
       params?: { [name: string]: number | string } | number[];
@@ -327,6 +417,14 @@ class SCSynth {
     return this;
   }
 
+  /**
+   * Frees the synth from the server
+   * @async
+   * @method free
+   * @param {Object} [opts] - Options
+   * @param {OSCClient} [opts.client] - Custom OSC client
+   * @returns {Promise<void>}
+   */
   async free(opts?: OSCClientOpts): Promise<void> {
     if (this.id == null) return;
 
