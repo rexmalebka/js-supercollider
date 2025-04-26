@@ -22,6 +22,23 @@ export type SCGroupOpts = {
 
 export type SCPosition =
   | {
+      head?: number | SCGroup | SCSynth;
+    }
+  | {
+      tail?: number | SCGroup | SCSynth;
+    }
+  | {
+      before?: number | SCGroup | SCSynth;
+    }
+  | {
+      after?: number | SCGroup | SCSynth;
+    }
+  | {
+      replace?: number | SCGroup | SCSynth;
+    };
+
+export type SCPositionNodes =
+  | {
       head?: (number | SCGroup | SCSynth)[];
     }
   | {
@@ -32,7 +49,4 @@ export type SCPosition =
     }
   | {
       after?: (number | SCGroup | SCSynth)[];
-    }
-  | {
-      replace?: number | SCGroup | SCSynth;
     };

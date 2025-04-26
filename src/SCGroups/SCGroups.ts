@@ -7,6 +7,7 @@ import {
   Node,
   SCGroupOpts,
   SCPosition,
+  SCPositionNodes,
 } from "../types/SCGroups";
 import { SCSynth } from "../SCSynths/SCSynth";
 
@@ -339,7 +340,7 @@ class SCGroup {
    * @param opts - Configuration including nodes to add and their position
    * @returns This group instance for chaining
    */
-  async add(opts?: OSCClientOpts & SCPosition): Promise<SCGroup> {
+  async add(opts?: OSCClientOpts & SCPositionNodes): Promise<SCGroup> {
     if (this.id == null) return this;
 
     if (
@@ -490,6 +491,8 @@ class SCGroup {
       }
     }
   }
+
+  set;
 }
 
 export { queryTree, SCGroup };

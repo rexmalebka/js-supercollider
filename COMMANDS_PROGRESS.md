@@ -17,8 +17,8 @@ This file tracks implementation progress of OSC commands by difficulty and usage
 | `/n_set`   | Set control values | ✅           | `new SCSynth({id:111}).set({amp:2})`     |
 | `/n_free`  | Free node          | ✅           | `new SCSynth({id: 1001}).free()`         |
 | `/n_run`   | Pause/resume node  | ⬜           |                                          |
-| `/b_alloc` | Allocate buffer    | ⬜           |                                          |
-| `/b_free`  | Free buffer        | ⬜           |                                          |
+| `/b_alloc` | Allocate buffer    | ✅           |                                          |
+| `/b_free`  | Free buffer        | ✅           |                                          |
 | `/b_zero`  | Zero buffer        | ⬜           |                                          |
 
 ---
@@ -28,17 +28,17 @@ This file tracks implementation progress of OSC commands by difficulty and usage
 | Command             | Description              | Implemented? | Notes           |
 | ------------------- | ------------------------ | ------------ | --------------- |
 | `/g_new`            | Create group             | ✅           | `new SCGroup()` |
-| `/g_head`           | Add node to head         | ⬜           |                 |
-| `/g_tail`           | Add node to tail         | ⬜           |                 |
-| `/n_before`         | Move node before another | ⬜           |                 |
-| `/g_freeAll`        | Free all in group        | ⬜           |                 |
-| `/g_deepFree`       | Free group & subnodes    | ⬜           |                 |
-| `/b_read`           | Read file into buffer    | ⬜           |                 |
+| `/g_head`           | Add node to head         | ✅           |                 |
+| `/g_tail`           | Add node to tail         | ✅           |                 |
+| `/n_before`         | Move node before another | ✅           |                 |
+| `/g_freeAll`        | Free all in group        | ✅           |                 |
+| `/g_deepFree`       | Free group & subnodes    | ✅           |                 |
+| `/b_read`           | Read file into buffer    | ✅           |                 |
 | `/b_write`          | Write buffer to file     | ⬜           |                 |
 | `/b_set`, `/b_setn` | Set buffer samples       | ⬜           |                 |
 | `/b_get`, `/b_getn` | Get buffer samples       | ⬜           |                 |
 | `/g_dumpTree`       | Dump node tree           | ⬜           |                 |
-| `/g_queryTree`      | Query node tree          | ⬜           |                 |
+| `/g_queryTree`      | Query node tree          | ✅           |                 |
 | `/n_trace`          | Trace node execution     | ⬜           |                 |
 | `/n_query`          | Query node               | ⬜           |                 |
 
