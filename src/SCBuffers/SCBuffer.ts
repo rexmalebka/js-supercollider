@@ -11,6 +11,15 @@ const execPromise = promisify(exec);
 const SUPPORTED_FORMATS = [".wav", ".flac"];
 const TEMP_DIR = path.resolve("/tmp/sclang-audio-cache");
 
+/**
+ * Queries the server for Buffers by ID
+ * @async
+ * @function queryBuffer
+ * @param {Array.number} ids - The synth IDs to query
+ * @param {Object} [opts] - Options
+ * @param {OSCClient} [opts.client] - Custom OSC client
+ * @returns {Promise<SCBufferInfo[]>} The found buffers
+ */
 async function queryBuffer(
   ids: number[],
   opts?: OSCClientOpts
@@ -72,6 +81,18 @@ class SCBufferInvalidError extends Error {
   }
 }
 
+/**
+ * Error thrown when buffer creation is attempted and file does not exists
+ * @class SCBufferPathNotFound
+ * @extends Error
+ */
+class SCBufferPathNotFound extends Error {
+  constructor(path: string) {
+    super(`Path does not exists "${path}"`);
+    this.name = "SCBufferPathNotFound";
+  }
+}
+
 async function getAudioChannels(filePath: string): Promise<number> {
   const cmd = `ffprobe -i "${filePath}" -show_entries stream=channels -select_streams a:0 -of compact=p=0:nk=1 -v 0`;
   try {
@@ -84,6 +105,13 @@ async function getAudioChannels(filePath: string): Promise<number> {
   }
 }
 
+/**
+ * Converts the audio to wav suitable format 44100 samplerate 2 channels (ffmpeg is required)
+ * @async
+ * @function convertToWav
+ * @param {string} filePath - The path of audio file
+ * @returns {Promise<string>} The path of converted wav file
+ */
 async function convertToWav(filePath: string): Promise<string> {
   await fs.promises.mkdir(TEMP_DIR, { recursive: true });
   const baseName = path.basename(filePath, path.extname(filePath));
@@ -99,6 +127,14 @@ async function convertToWav(filePath: string): Promise<string> {
   }
 }
 
+/**
+ * Queries theserver for a empty slot for a buffer
+ * @async
+ * @function findFreeBufferBlock
+ * @param {Object} [opts] - Options
+ * @param {OSCClient} [opts.client] - Custom OSC client
+ * @returns {Promise<number>} The found id for the next buffer
+ */
 async function findFreeBufferBlock(opts?: OSCClientOpts): Promise<number> {
   const client = opts?.client ?? new OSCClient();
   let i = 0;
@@ -131,11 +167,48 @@ async function findFreeBufferBlock(opts?: OSCClientOpts): Promise<number> {
   }
 }
 
+/**
+ * Represents a SuperCollider buffer
+ * @class SCBuffer
+ * @example
+ * // Create a new buffer
+ * const buffer = new SCBuffer({ path: '/tmp/audio.mp3' });
+ * await buffer.init();
+ */
 class SCBuffer {
+  /**
+   * The path of the file
+   * @type {?string}
+   * @public
+   */
   path: string | null;
+  /**
+   * The id of the referenced buffer
+   * @type {?string}
+   * @public
+   */
   id: number | null;
+  /**
+   * The allocation options
+   * @type {?object}
+   * @param {Object} [opts.allocate] - allocation Options
+   * @param {number} [opts.allocate.channels] - number of channels
+   * @param {number} [opts.allocate.frames] - number of frames to allocate
+   * @public
+   */
   allocate: null | { channels: number; frames: number };
 
+  /**
+   * Creates a new SCBuffer instance
+   * @constructor
+   * @param {Object} opts - Configuration options
+   * @param {string} [opts.path] - path of audio file
+   * @param {number} [opts.id] - Existing synth ID to reference
+   * @param {Object} [opts.allocate] - Allocation options
+   * @param {number} [opts.allocate.channels] - Allocation channels
+   * @param {number} [opts.allocate.frames] - Frames to allocate
+   * @throws {SCBufferInvalidError} If neither path, id or allocate is provided
+   */
   constructor(opts: SCBufferOpts) {
     if (
       opts.path == undefined &&
@@ -156,11 +229,21 @@ class SCBuffer {
           };
   }
 
+  /**
+   * Initializes the buffer on the server
+   * @async
+   * @method init
+   * @param {Object} [opts] - Initialization options
+   * @param {OSCClient} [opts.client] - Custom OSC client
+   * @param {Array.number} [opts.data] - Data values
+   * @returns {Promise<SCBuffer>} The initialized buffer
+   * @throws {SCBufferPathNotFound} Path is not found
+   */
   async init(opts?: OSCClientOpts & { data: number[] }) {
     if (this.id != null) return this;
 
     if (!fs.existsSync(this.path)) {
-      throw new Error(`File does not exist: ${this.path}`);
+      throw new SCBufferPathNotFound(this.path);
     }
 
     const ext = path.extname(this.path).toLowerCase();
@@ -257,6 +340,14 @@ class SCBuffer {
     }
   }
 
+  /**
+   * Get number of channels
+   * @async
+   * @method getChannels
+   * @param {Object} [opts] - Options
+   * @param {OSCClient} [opts.client] - Custom OSC client
+   * @returns {Promise<number>}
+   */
   async getChannels(opts?: OSCClientOpts): Promise<number> {
     if (this.id == null) return 0;
 
@@ -272,6 +363,14 @@ class SCBuffer {
     }
   }
 
+  /**
+   * Get number of frames
+   * @async
+   * @method getFrames
+   * @param {Object} [opts] - Options
+   * @param {OSCClient} [opts.client] - Custom OSC client
+   * @returns {Promise<number>}
+   */
   async getFrames(opts?: OSCClientOpts): Promise<number> {
     if (this.id == null) return 0;
 
@@ -287,6 +386,14 @@ class SCBuffer {
     }
   }
 
+  /**
+   * Get sample rate
+   * @async
+   * @method getSampleRate
+   * @param {Object} [opts] - Options
+   * @param {OSCClient} [opts.client] - Custom OSC client
+   * @returns {Promise<number>}
+   */
   async getSampleRate(opts?: OSCClientOpts): Promise<number> {
     if (this.id == null) return 0;
 
@@ -302,6 +409,14 @@ class SCBuffer {
     }
   }
 
+  /**
+   * Frees the buffer from the server
+   * @async
+   * @method free
+   * @param {Object} [opts] - Options
+   * @param {OSCClient} [opts.client] - Custom OSC client
+   * @returns {Promise<SCBuffer>}
+   */
   async free(opts?: OSCClientOpts): Promise<SCBuffer> {
     if (this.id == null) return this;
 
@@ -325,4 +440,4 @@ class SCBuffer {
   }
 }
 
-export { queryBuffer, SCBuffer };
+export { queryBuffer, SCBufferInfo, SCBufferPathNotFound, SCBuffer };

@@ -3,6 +3,7 @@ import OSCClient from "../oscClient";
 import { OSCClientOpts } from "../types/OSCClient";
 import { SCPosition, SCSynthOpts } from "../types/SCSynth";
 import { SCGroup } from "../SCGroups/SCGroups";
+import { SCControlBus } from "../SCControlBus/SCControlBus";
 
 /**
  * Error thrown when a referenced synth cannot be found on the server
@@ -121,37 +122,15 @@ class SCSynth {
         params?: { [name: string]: number | string } | number[];
       }
   ) {
-    if (!opts.synthdef && !opts.id) {
+    if (opts.synthdef == undefined && opts.id == undefined) {
       throw new SCSynthInvalidError();
     }
 
     this.synthdef = opts.synthdef ?? null;
     this.id = opts.id ?? null;
-    this.action =
-      "head" in (opts ?? {})
-        ? 0
-        : "tail" in (opts ?? {})
-        ? 1
-        : "before" in (opts ?? {})
-        ? 2
-        : "after" in (opts ?? {})
-        ? 3
-        : "replace" in (opts ?? {})
-        ? 4
-        : 0;
+    this.action = this.determineAction(opts);
 
-    this.target =
-      "head" in (opts ?? {})
-        ? opts["head"]
-        : "tail" in (opts ?? {})
-        ? opts["tail"]
-        : "before" in (opts ?? {})
-        ? opts["before"]
-        : "after" in (opts ?? {})
-        ? opts["after"]
-        : "replace" in (opts ?? {})
-        ? opts["replace"]
-        : 0;
+    this.target = this.determineTarget(opts);
 
     if (
       (this.target instanceof SCGroup || this.target instanceof SCSynth) &&
@@ -161,6 +140,24 @@ class SCSynth {
     }
 
     this.params = opts.params ?? {};
+  }
+
+  private determineAction(opts: any): number {
+    if ("head" in opts) return 0;
+    if ("tail" in opts) return 1;
+    if ("before" in opts) return 2;
+    if ("after" in opts) return 3;
+    if ("replace" in opts) return 4;
+    return 0;
+  }
+
+  private determineTarget(opts: any): number | SCSynth | SCGroup {
+    if ("head" in opts) return opts.head;
+    if ("tail" in opts) return opts.tail;
+    if ("before" in opts) return opts.before;
+    if ("after" in opts) return opts.after;
+    if ("replace" in opts) return opts.replace;
+    return 0;
   }
 
   /**
@@ -228,7 +225,9 @@ class SCSynth {
    * await synth.set([440, 0.5]);
    */
   async set(
-    params: { [name: string]: number | string } | number[],
+    params:
+      | { [name: string]: number | string | SCControlBus }
+      | (number | string | SCControlBus)[],
     opts?: OSCClientOpts
   ): Promise<void> {
     if (!this.id) {
@@ -237,49 +236,62 @@ class SCSynth {
 
     const client = opts?.client ?? new OSCClient();
 
-    params = params ?? [];
-    const paramArgs: OscMessage["args"] = [];
+    // Separate regular params and bus mappings
+    const scalarArgs: OscMessage["args"] = [];
+    const mapArgs: OscMessage["args"] = [];
 
-    if (Array.isArray(params)) {
-      params.forEach((param, index) => {
-        paramArgs.push(
+    Object.entries(params).forEach(([name, param]) => {
+      if (param instanceof SCControlBus) {
+        mapArgs.push(
+          {
+            type: isNaN(Number(name)) ? "s" : "i",
+            value: isNaN(Number(name)) ? name : Number(name),
+          },
           {
             type: "i",
-            value: index,
+            value: param.id,
+          }
+        );
+      } else {
+        scalarArgs.push(
+          {
+            type: isNaN(Number(name)) ? "s" : "i",
+            value: isNaN(Number(name)) ? name : Number(name),
           },
           {
-            type: typeof param == "number" ? "f" : "s",
+            type: isNaN(Number(param)) ? "s" : "i",
             value: param,
           }
         );
-      });
-    } else {
-      Object.entries(params).forEach(([name, param]) => {
-        paramArgs.push(
-          {
-            type: "s",
-            value: name,
-          },
-          {
-            type: typeof param == "number" ? "f" : "s",
-            value: param,
-          }
-        );
-      });
-    }
+      }
+    });
+
     try {
-      const msg = {
+      const msgScalar = {
         address: "/n_set",
         args: [
           {
             type: "i",
             value: this.id,
           },
-          ...paramArgs,
+          ...scalarArgs,
         ],
       };
 
-      await client.send(msg as OscMessage);
+      await client.send(msgScalar as OscMessage);
+
+      const msgBusData = {
+        address: "/n_map",
+        args: [
+          {
+            type: "i",
+            value: this.id,
+          },
+          ...mapArgs,
+        ],
+      };
+
+      await client.send(msgBusData as OscMessage);
     } finally {
       if (!opts?.client) {
         client.client.close();
@@ -303,69 +315,19 @@ class SCSynth {
    */
   async init(
     opts?: OSCClientOpts & {
-      params?: { [name: string]: number | string } | number[];
+      params?:
+        | { [name: string]: number | string | SCControlBus }
+        | (number | string | SCControlBus)[];
     } & SCPosition
   ): Promise<SCSynth> {
     if (this.id != null) return this;
 
     const client = opts?.client ?? new OSCClient();
 
-    this.action =
-      "head" in (opts ?? {})
-        ? 0
-        : "tail" in (opts ?? {})
-        ? 1
-        : "before" in (opts ?? {})
-        ? 2
-        : "after" in (opts ?? {})
-        ? 3
-        : "replace" in (opts ?? {})
-        ? 4
-        : 0;
-
-    this.target =
-      "head" in (opts ?? {})
-        ? opts["head"]
-        : "tail" in (opts ?? {})
-        ? opts["tail"]
-        : "before" in (opts ?? {})
-        ? opts["before"]
-        : "after" in (opts ?? {})
-        ? opts["after"]
-        : "replace" in (opts ?? {})
-        ? opts["replace"]
-        : 0;
+    this.action = this.determineAction(opts);
+    this.target = this.determineTarget(opts);
 
     const params = opts?.params ?? [];
-    const paramArgs: OscMessage["args"] = [];
-
-    if (Array.isArray(params)) {
-      params.forEach((param, index) => {
-        paramArgs.push(
-          {
-            type: "i",
-            value: index,
-          },
-          {
-            type: typeof param == "number" ? "f" : "s",
-            value: param,
-          }
-        );
-      });
-    } else {
-      Object.entries(params).forEach(([name, param]) => {
-        paramArgs.push(
-          {
-            type: "s",
-            value: name,
-          },
-          {
-            type: typeof param == "number" ? "f" : "s",
-            value: param,
-          }
-        );
-      });
-    }
 
     try {
       let synthId = 1000; // Start searching from this ID
@@ -390,25 +352,14 @@ class SCSynth {
       await client.send({
         address: "/s_new",
         args: [
-          {
-            type: "s",
-            value: this.synthdef,
-          },
-          {
-            type: "i",
-            value: this.id,
-          },
-          {
-            type: "i",
-            value: this.action,
-          },
-          {
-            type: "i",
-            value: target_id,
-          },
-          ...paramArgs,
+          { type: "s", value: this.synthdef },
+          { type: "i", value: this.id },
+          { type: "i", value: this.action },
+          { type: "i", value: target_id },
         ],
       });
+
+      await this.set(params);
     } finally {
       if (!opts?.client) {
         client.client.close();

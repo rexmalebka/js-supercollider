@@ -6,8 +6,6 @@ export type SCSynthOpts = {
   id?: number;
 };
 
-
-
 export type SCPosition =
   | {
       head?: number | SCGroup | SCSynth;
