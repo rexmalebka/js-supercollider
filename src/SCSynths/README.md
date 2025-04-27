@@ -57,7 +57,7 @@ await synth.init({
 ## set
 
 ```typescript
-set(params: { [name: string]: number | string } | number[],
+set(params:  { [name: string]: number | string | SCControlBus } | (number | string | SCControlBus)[],
     opts?: OSCClientOpts?): Promise<SCSynth>
 ```
 
@@ -69,6 +69,11 @@ await synth.set({ freq: 880, amp: 0.2 });
 
 // Set parameters by index
 await synth.set([440, 0.5]); // For synths using positional args
+
+// Set parameters from control bus
+const bus = new SCControlBus({id: 0})
+await bus.set(1.2)
+await synth.set({amp: bus}); 
 ```
 
 ## get
