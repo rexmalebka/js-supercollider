@@ -14,7 +14,7 @@ Creates a new SCGroup instance.
 
 ### Parameters:
 
-- `opts` (Optional): Configuration options
+- `opts` (OptionaConfigurationl):  options
 
   - `id`: Existing group ID to reference
   - Positional options (one of the following):
