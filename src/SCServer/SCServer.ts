@@ -31,6 +31,7 @@ const status = async (opts?: OSCClientOpts): Promise<StatusResponse> => {
       )
     ).args.map((arg) => arg["value"]);
 
+    
     return {
       ugens,
       synths,

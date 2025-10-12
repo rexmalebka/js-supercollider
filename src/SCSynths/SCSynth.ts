@@ -143,6 +143,7 @@ class SCSynth {
   }
 
   private determineAction(opts: any): number {
+    if (!opts) return 0;
     if ("head" in opts) return 0;
     if ("tail" in opts) return 1;
     if ("before" in opts) return 2;
@@ -152,12 +153,54 @@ class SCSynth {
   }
 
   private determineTarget(opts: any): number | SCSynth | SCGroup {
+    if (!opts) return 0;
     if ("head" in opts) return opts.head;
     if ("tail" in opts) return opts.tail;
     if ("before" in opts) return opts.before;
     if ("after" in opts) return opts.after;
     if ("replace" in opts) return opts.replace;
     return 0;
+  }
+
+  private generateParamsMsg(
+    params:
+      | { [name: string]: number | string | SCControlBus }
+      | (number | string | SCControlBus)[]
+  ): { scalarArgs: OscMessage["args"]; mapArgs: OscMessage["args"] } {
+    // Separate regular params and bus mappings
+    const scalarArgs: OscMessage["args"] = [];
+    const mapArgs: OscMessage["args"] = [];
+
+    Object.entries(params).forEach(([name, param]) => {
+      if (param instanceof SCControlBus) {
+        mapArgs.push(
+          {
+            type: isNaN(Number(name)) ? "s" : "f",
+            value: isNaN(Number(name)) ? name : Number(name),
+          },
+          {
+            type: "s",
+            value: param.id,
+          }
+        );
+      } else {
+        scalarArgs.push(
+          {
+            type: isNaN(Number(name)) ? "s" : "i",
+            value: isNaN(Number(name)) ? name : Number(name),
+          },
+          {
+            type: isNaN(Number(param)) ? "s" : "f",
+            value: param,
+          }
+        );
+      }
+    });
+
+    return {
+      scalarArgs,
+      mapArgs,
+    };
   }
 
   /**
@@ -236,35 +279,7 @@ class SCSynth {
 
     const client = opts?.client ?? new OSCClient();
 
-    // Separate regular params and bus mappings
-    const scalarArgs: OscMessage["args"] = [];
-    const mapArgs: OscMessage["args"] = [];
-
-    Object.entries(params).forEach(([name, param]) => {
-      if (param instanceof SCControlBus) {
-        mapArgs.push(
-          {
-            type: isNaN(Number(name)) ? "s" : "i",
-            value: isNaN(Number(name)) ? name : Number(name),
-          },
-          {
-            type: "i",
-            value: param.id,
-          }
-        );
-      } else {
-        scalarArgs.push(
-          {
-            type: isNaN(Number(name)) ? "s" : "i",
-            value: isNaN(Number(name)) ? name : Number(name),
-          },
-          {
-            type: isNaN(Number(param)) ? "s" : "i",
-            value: param,
-          }
-        );
-      }
-    });
+    const { scalarArgs, mapArgs } = this.generateParamsMsg(params);
 
     try {
       const msgScalar = {
@@ -349,6 +364,7 @@ class SCSynth {
           ? this.target.id
           : this.target;
 
+      const { scalarArgs, mapArgs } = this.generateParamsMsg(params);
       await client.send({
         address: "/s_new",
         args: [
@@ -356,10 +372,9 @@ class SCSynth {
           { type: "i", value: this.id },
           { type: "i", value: this.action },
           { type: "i", value: target_id },
+          ...scalarArgs,
         ],
       });
-
-      await this.set(params);
     } finally {
       if (!opts?.client) {
         client.client.close();
