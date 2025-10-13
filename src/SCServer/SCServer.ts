@@ -7,6 +7,13 @@ import {
   VersionResponse,
 } from "../types/SCServer";
 
+  /**
+   * retrieve server status
+   * @async
+   * @param {Object} [opts] - Options
+   * @param {OSCClient} [opts.client] - Custom OSC client
+   * @returns {Promise<StatusResponse>}
+   */
 const status = async (opts?: OSCClientOpts): Promise<StatusResponse> => {
   const client = opts?.client ?? new OSCClient();
 
@@ -31,7 +38,6 @@ const status = async (opts?: OSCClientOpts): Promise<StatusResponse> => {
       )
     ).args.map((arg) => arg["value"]);
 
-    
     return {
       ugens,
       synths,
@@ -49,6 +55,13 @@ const status = async (opts?: OSCClientOpts): Promise<StatusResponse> => {
   }
 };
 
+  /**
+   * retrieve server version
+   * @async
+   * @param {Object} [opts] - Options
+   * @param {OSCClient} [opts.client] - Custom OSC client
+   * @returns {Promise<VersionResponse>}
+   */
 const version = async (opts?: OSCClientOpts): Promise<VersionResponse> => {
   const client = opts?.client ?? new OSCClient();
 
@@ -78,6 +91,13 @@ const version = async (opts?: OSCClientOpts): Promise<VersionResponse> => {
   }
 };
 
+  /**
+   * quits server
+   * @async
+   * @param {Object} [opts] - Options
+   * @param {OSCClient} [opts.client] - Custom OSC client
+   * @returns {Promise<QuitResponse>}
+   */
 const quit = async (opts?: OSCClientOpts): Promise<QuitResponse> => {
   const client = opts?.client ?? new OSCClient();
 
@@ -92,19 +112,30 @@ const quit = async (opts?: OSCClientOpts): Promise<QuitResponse> => {
   }
 };
 
+  /**
+   * dumps OSC messages for debugging
+   * @async
+   * @param {number} [level] - debuggin levels from 0 to 3
+   * @param {Object} [opts] - Options
+   * @param {OSCClient} [opts.client] - Custom OSC client
+   * @returns {Promise<QuitResponse>}
+   */
 const dumpOSC = async (level?: number, opts?: OSCClientOpts) => {
   const client = opts?.client ?? new OSCClient();
 
   try {
-    await client.send({
-      address: "/dumpOSC",
-      args: [
-        {
-          type: "i",
-          value: level ?? 0,
-        },
-      ],
-    });
+    await client.send(
+      {
+        address: "/dumpOSC",
+        args: [
+          {
+            type: "i",
+            value: level ?? 0,
+          },
+        ],
+      },
+      opts?.timeout
+    );
   } finally {
     if (!opts?.client) {
       client.client.close();

@@ -14,7 +14,7 @@ Creates a new SCBuffer instance.
 
 ### Parameters
 
-- `opts` (OptionaConfigurationl): options
+- `opts` (OptionaConfiguration): options
   - `id`: Existing buffer ID to reference
   - `path`: Existing path of audio files (files other than wav requires ffmpeg for transcoding)
   - `allocate`: Allocation options
@@ -81,3 +81,20 @@ free(opts?: OSCClientOpts ): Promise<SCBuffer>
 ```
 
 Removes this buffer from the server.
+
+## Set
+
+```typescript
+set(opts: {data: number[], from: number} & OSCClientOpts ): Promise<SCBuffer>
+```
+
+Sets sequential frames from index
+
+
+## Get
+
+```typescript
+get(opts: {index: number|number[]  & OSCClientOpts ): Promise<SCBuffer>
+```
+
+Gets sequential frames from index array

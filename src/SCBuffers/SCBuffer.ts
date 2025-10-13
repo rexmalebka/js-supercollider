@@ -7,65 +7,12 @@ import { exec } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
 
+// Utilities
 const execPromise = promisify(exec);
 const SUPPORTED_FORMATS = [".wav", ".flac"];
 const TEMP_DIR = path.resolve("/tmp/sclang-audio-cache");
 
-/**
- * Queries the server for Buffers by ID
- * @async
- * @function queryBuffer
- * @param {Array.number} ids - The synth IDs to query
- * @param {Object} [opts] - Options
- * @param {OSCClient} [opts.client] - Custom OSC client
- * @returns {Promise<SCBufferInfo[]>} The found buffers
- */
-async function queryBuffer(
-  ids: number[],
-  opts?: OSCClientOpts
-): Promise<SCBufferInfo[]> {
-  const client = opts?.client ?? new OSCClient();
-
-  try {
-    const info = await client.request(
-      {
-        address: "/b_query",
-        args: [
-          ...(ids.map((id) => ({
-            type: "i",
-            value: id,
-          })) as OscMessage["args"]),
-        ],
-      },
-      ["/b_info"]
-    );
-
-    let buffers: SCBufferInfo[] = [];
-
-    while (info.args.length > 0) {
-      const buffer = info.args.splice(0, 4);
-
-      buffers.push({
-        id: Number((buffer as { type: OscType; value: OscValue }[])[0].value),
-        frames: Number(
-          (buffer as { type: OscType; value: OscValue }[])[1].value
-        ),
-        channels: Number(
-          (buffer as { type: OscType; value: OscValue }[])[2].value
-        ),
-        sampleRate: Number(
-          (buffer as { type: OscType; value: OscValue }[])[3].value
-        ),
-      });
-    }
-
-    return buffers;
-  } finally {
-    if (!opts?.client) {
-      client.client.close();
-    }
-  }
-}
+// --- Error classes ---
 
 /**
  * Error thrown when buffer creation is attempted without required parameters
@@ -82,7 +29,7 @@ class SCBufferInvalidError extends Error {
 }
 
 /**
- * Error thrown when buffer creation is attempted and file does not exists
+ * Error thrown when buffer creation is attempted and file does not exist
  * @class SCBufferPathNotFound
  * @extends Error
  */
@@ -93,6 +40,14 @@ class SCBufferPathNotFound extends Error {
   }
 }
 
+// --- Helper Functions ---
+
+/**
+ * Get the number of audio channels from a file using ffprobe.
+ * @param filePath {string} Path to audio file.
+ * @returns {Promise<number>} Number of channels reported by ffprobe.
+ * @throws Error if ffprobe fails.
+ */
 async function getAudioChannels(filePath: string): Promise<number> {
   const cmd = `ffprobe -i "${filePath}" -show_entries stream=channels -select_streams a:0 -of compact=p=0:nk=1 -v 0`;
   try {
@@ -106,11 +61,10 @@ async function getAudioChannels(filePath: string): Promise<number> {
 }
 
 /**
- * Converts the audio to wav suitable format 44100 samplerate 2 channels (ffmpeg is required)
- * @async
- * @function convertToWav
- * @param {string} filePath - The path of audio file
- * @returns {Promise<string>} The path of converted wav file
+ * Convert given audio file to wav format, using ffmpeg.
+ * @param filePath {string} Path to original audio file.
+ * @returns {Promise<string>} Path to converted wav file.
+ * @throws Error if conversion fails.
  */
 async function convertToWav(filePath: string): Promise<string> {
   await fs.promises.mkdir(TEMP_DIR, { recursive: true });
@@ -128,12 +82,11 @@ async function convertToWav(filePath: string): Promise<string> {
 }
 
 /**
- * Queries theserver for a empty slot for a buffer
+ * Search for free buffer block on server.
  * @async
  * @function findFreeBufferBlock
- * @param {Object} [opts] - Options
- * @param {OSCClient} [opts.client] - Custom OSC client
- * @returns {Promise<number>} The found id for the next buffer
+ * @param opts {OSCClientOpts}
+ * @returns {Promise<number>} ID of free buffer block.
  */
 async function findFreeBufferBlock(opts?: OSCClientOpts): Promise<number> {
   const client = opts?.client ?? new OSCClient();
@@ -168,7 +121,68 @@ async function findFreeBufferBlock(opts?: OSCClientOpts): Promise<number> {
 }
 
 /**
- * Represents a SuperCollider buffer
+ * Query the server for buffer info for the given buffer IDs.
+ * @async
+ * @function queryBuffer
+ * @param {Array.number} ids - The synth IDs to query
+ * @param {Object} [opts] - Options
+ * @param {OSCClient} [opts.client] - Custom OSC client
+ * @returns {Promise<SCBufferInfo[]>} The found buffers
+ */
+async function queryBuffer(
+  ids: number[],
+  opts?: OSCClientOpts
+): Promise<SCBufferInfo[]> {
+  const client = opts?.client ?? new OSCClient();
+
+  try {
+    const info = await client.request(
+      {
+        address: "/b_query",
+        args: [
+          ...(ids.map((id) => ({
+            type: "i",
+            value: id,
+          })) as OscMessage["args"]),
+        ],
+      },
+      ["/b_info"],
+      opts?.timeout
+    );
+
+    let buffers: SCBufferInfo[] = [];
+
+    while (info.args.length > 0) {
+      const buffer = info.args.splice(0, 4);
+
+      buffers.push({
+        id: Number((buffer as { type: OscType; value: OscValue }[])[0].value),
+        frames: Number(
+          (buffer as { type: OscType; value: OscValue }[])[1].value
+        ),
+        channels: Number(
+          (buffer as { type: OscType; value: OscValue }[])[2].value
+        ),
+        sampleRate: Number(
+          (buffer as { type: OscType; value: OscValue }[])[3].value
+        ),
+      });
+    }
+
+    return buffers;
+  } finally {
+    if (!opts?.client) {
+      client.client.close();
+    }
+  }
+}
+
+// --- SCBuffer class ---
+
+/**
+ * Represents a SuperCollider buffer.
+ * Encapsulates server buffer allocation, lifecycle, and audio data interaction.
+ *
  * @class SCBuffer
  * @example
  * // Create a new buffer
@@ -247,24 +261,21 @@ class SCBuffer {
    * @throws {SCBufferPathNotFound} Path is not found
    */
   async init(opts?: OSCClientOpts & { data: number[] }) {
-    /**
-     * - create a buffer with zeroes
-     *    -should have an id and allocate channel and
-     * - create a buffer out of a path
-     *    - a path, could have allocate
-     * - refer to an existing id buffer
-     *    - only an id
-     */
-
     const client = opts?.client ?? new OSCClient();
 
     if (!this.id) {
-      this.id = await findFreeBufferBlock({ client });
+      this.id = await findFreeBufferBlock({ client, timeout: opts?.timeout });
     }
 
     try {
-      if (this.path) return await this.readFromFile(client);
-      if (!this.path) return await this.allocateBuffer(client, opts.data);
+      if (this.path)
+        return await this.readFromFile({ client, timeout: opts?.timeout });
+      if (!this.path)
+        return await this.allocateBuffer({
+          data: opts.data,
+          client: client,
+          timeout: opts?.timeout,
+        });
     } finally {
       if (!opts?.client) {
         client.client.close();
@@ -274,7 +285,10 @@ class SCBuffer {
     return this;
   }
 
-  private async readFromFile(client: OSCClient): Promise<SCBuffer> {
+  private async readFromFile({
+    client,
+    timeout,
+  }: OSCClientOpts): Promise<SCBuffer> {
     const ext = path.extname(this.path).toLowerCase();
 
     this.path = SUPPORTED_FORMATS.includes(ext)
@@ -308,17 +322,18 @@ class SCBuffer {
           ).map((chan) => ({ type: "i", value: chan } as OscValue)),
         ],
       },
-      ["/done"]
+      ["/done"],
+      timeout
     );
 
     return this;
   }
 
   private async allocateBuffer(
-    client: OSCClient,
-    data: number[]
+    opts: { data: number[] } & OSCClientOpts
   ): Promise<SCBuffer> {
-    await client.request(
+    const data = opts.data;
+    await opts?.client.request(
       {
         address: "/b_alloc",
         args: [
@@ -327,11 +342,12 @@ class SCBuffer {
           { type: "i", value: this.allocate.channels },
         ],
       },
-      ["/done"]
+      ["/done"],
+      opts?.timeout
     );
 
     if (data) {
-      await this.set({ data, client, from: 0 });
+      await this.set({ from: 0, ...opts });
     }
 
     return this;
@@ -351,7 +367,7 @@ class SCBuffer {
     const client = opts?.client ?? new OSCClient();
 
     try {
-      const buffer = await queryBuffer([this.id]);
+      const buffer = await queryBuffer([this.id], opts);
       return buffer[0].channels;
     } finally {
       if (!opts?.client) {
@@ -374,7 +390,7 @@ class SCBuffer {
     const client = opts?.client ?? new OSCClient();
 
     try {
-      const buffer = await queryBuffer([this.id]);
+      const buffer = await queryBuffer([this.id], opts);
       return buffer[0].frames;
     } finally {
       if (!opts?.client) {
@@ -383,25 +399,40 @@ class SCBuffer {
     }
   }
 
-  async set(opts: { data: number[]; from: number } & OSCClientOpts) {
+  /**
+   * Set number of frames
+   * @async
+   * @method set
+   * @param {Object} [opts] - Options
+   * @param {number[]} [opts.data] - data array
+   * @param {number} [opts.from] - where to start setting the data array
+   * @param {OSCClient} [opts.client] - Custom OSC client
+   * @returns {Promise<SCBuffer>}
+   */
+  async set(
+    opts: { data: number[]; from: number } & OSCClientOpts
+  ): Promise<SCBuffer> {
     const client = opts?.client ?? new OSCClient();
 
     try {
-      await client.send({
-        address: "/b_setn",
-        args: [
-          { type: "i", value: this.id },
-          { type: "i", value: opts.from },
-          { type: "i", value: opts.data.length },
-          ...opts.data.map(
-            (dat) =>
-              ({
-                type: "f",
-                value: dat,
-              } as OscValue)
-          ),
-        ],
-      });
+      await client.send(
+        {
+          address: "/b_setn",
+          args: [
+            { type: "i", value: this.id },
+            { type: "i", value: opts.from },
+            { type: "i", value: opts.data.length },
+            ...opts.data.map(
+              (dat) =>
+                ({
+                  type: "f",
+                  value: dat,
+                } as OscValue)
+            ),
+          ],
+        },
+        opts?.timeout
+      );
 
       return this;
     } finally {
@@ -431,7 +462,8 @@ class SCBuffer {
             ),
           ],
         },
-        ["/b_set"]
+        ["/b_set"],
+        opts?.timeout
       );
 
       const samples = [];
@@ -461,7 +493,7 @@ class SCBuffer {
     const client = opts?.client ?? new OSCClient();
 
     try {
-      const buffer = await queryBuffer([this.id]);
+      const buffer = await queryBuffer([this.id], opts);
       return buffer[0].sampleRate;
     } finally {
       if (!opts?.client) {
@@ -489,7 +521,8 @@ class SCBuffer {
           address: "/b_free",
           args: [{ type: "i", value: this.id }],
         },
-        ["/done"]
+        ["/done"],
+        opts?.timeout
       );
 
       return this;
