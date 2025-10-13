@@ -268,16 +268,18 @@ class SCSynth {
    * await synth.set([440, 0.5]);
    */
   async set(
-    params:
-      | { [name: string]: number | string | SCControlBus }
-      | (number | string | SCControlBus)[],
-    opts?: OSCClientOpts
+    opts: {
+      params:
+        | { [name: string]: number | string | SCControlBus }
+        | (number | string | SCControlBus)[];
+    } & OSCClientOpts
   ): Promise<void> {
     if (!this.id) {
       return;
     }
 
     const client = opts?.client ?? new OSCClient();
+    const params = opts.params;
 
     const { scalarArgs, mapArgs } = this.generateParamsMsg(params);
 

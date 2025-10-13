@@ -10,6 +10,7 @@ import {
   SCPositionNodes,
 } from "../types/SCGroups";
 import { SCSynth } from "../SCSynths/SCSynth";
+import { SCControlBus } from "../SCControlBus/SCControlBus";
 
 function readSynth(
   args: (number | string)[],
@@ -492,7 +493,86 @@ class SCGroup {
     }
   }
 
-  set;
+  private generateParamsMsg(
+    params:
+      | { [name: string]: number | string | SCControlBus }
+      | (number | string | SCControlBus)[]
+  ): { scalarArgs: OscMessage["args"]; mapArgs: OscMessage["args"] } {
+    // Separate regular params and bus mappings
+    const scalarArgs: OscMessage["args"] = [];
+    const mapArgs: OscMessage["args"] = [];
+
+    Object.entries(params).forEach(([name, param]) => {
+      if (param instanceof SCControlBus) {
+        mapArgs.push(
+          {
+            type: isNaN(Number(name)) ? "s" : "f",
+            value: isNaN(Number(name)) ? name : Number(name),
+          },
+          {
+            type: "s",
+            value: param.id,
+          }
+        );
+      } else {
+        scalarArgs.push(
+          {
+            type: isNaN(Number(name)) ? "s" : "i",
+            value: isNaN(Number(name)) ? name : Number(name),
+          },
+          {
+            type: isNaN(Number(param)) ? "s" : "f",
+            value: param,
+          }
+        );
+      }
+    });
+
+    return {
+      scalarArgs,
+      mapArgs,
+    };
+  }
+
+  async set(
+    opts: { params: { [name: string]: number } | number[] } & OSCClientOpts
+  ): Promise<void> {
+    if (this.id == null) return;
+
+    const client = opts?.client ?? new OSCClient();
+
+    const { scalarArgs, mapArgs } = this.generateParamsMsg(opts.params);
+
+    try {
+      await client.send(
+        {
+          address: "/n_set",
+          args: [{ type: "i", value: this.id }, ...scalarArgs],
+        },
+        opts?.timeout
+      );
+
+      await client.send(
+        {
+          address: "/n_map",
+          args: [
+            {
+              type: "i",
+              value: this.id,
+            },
+            ...mapArgs,
+          ],
+        },
+        opts?.timeout
+      );
+
+      return;
+    } finally {
+      if (!opts?.client) {
+        client.client.close();
+      }
+    }
+  }
 }
 
 export { queryTree, SCGroup };
