@@ -1,5 +1,9 @@
 import { ChildProcessWithoutNullStreams, spawn } from "child_process";
 import { SCSynth } from "../src/SCSynths/SCSynth";
+import { queryTree, SCGroup } from "../src/SCGroups/SCGroups";
+import { SCControlBus } from "../src/SCControlBus/SCControlBus";
+import { SynthNode } from "../src/types/SCGroups";
+import { SCAudioBus } from "../src/SCAudioBus/SCAudioBus";
 
 const getSClang = (): Promise<ChildProcessWithoutNullStreams> => {
   let started = false;
@@ -144,7 +148,7 @@ describe("SCSynth tests", () => {
     });
 
     await synth.init();
-    await synth.set({ param: 6.5, param2: 7.1 });
+    await synth.set({ params: { param: 6.5, param2: 7.1 } });
 
     const testParam1 = await synth.get("param");
     const testParam2 = await synth.get("param2");
@@ -152,7 +156,7 @@ describe("SCSynth tests", () => {
     expect(testParam1).toBeCloseTo(6.5);
     expect(testParam2).toBeCloseTo(7.1);
 
-    await synth.set([3.4]);
+    await synth.set({ params: [3.4] });
 
     const testParam1Changed = await synth.get("param");
 
@@ -211,4 +215,82 @@ describe("SCSynth tests", () => {
     expect(testParam1).toBe(2);
     expect(testParam2).toBe(3);
   }, 25000);
+
+  it("Should place synth in specific position", async () => {
+    await SendSCCommand(
+      'SynthDef("test",{|param=2,param2=3| 0 }).add;Routine{	1.wait; ("SCServer" + [] + "SCServer").postln;}.play;'
+    );
+
+    const synth = await new SCSynth({ synthdef: "test" }).init({ tail: 0 });
+    const group = await new SCGroup({ id: 0 });
+    const nodes = await group.nodes();
+
+    expect(nodes[nodes.length - 1].id).toBe(synth.id);
+  });
+
+  it("Should map a bus control to a parameter", async () => {
+    await SendSCCommand(
+      's.dumpOSC(2);SynthDef("test_map",{|param=2,param2=3| 0 }).add;Routine{	1.wait; ("SCServer" + [] + "SCServer").postln;}.play;'
+    );
+    const bus = new SCControlBus({ id: 0 });
+    const synth = await new SCSynth({ synthdef: "test_map" }).init({ head: 0 });
+    await synth.set({
+      params: {
+        param: bus,
+      },
+    });
+
+    await bus.set([666]);
+
+    const group0 = await queryTree(0);
+
+    expect((group0.nodes[0] as SynthNode).controls.param).toBe(`c${bus.id}`);
+  });
+
+  it("Should create a synth with control and audio setted parameters", async () => {
+    await SendSCCommand(
+      's.dumpOSC(2);SynthDef("test_map3",{|param=2,param2=3| 0 }).add;Routine{	1.wait; ("SCServer" + [] + "SCServer").postln;}.play;'
+    );
+
+    const bus = new SCControlBus({ id: 0 });
+    const audio = new SCAudioBus({ id: 2 });
+
+    const synth = await new SCSynth({ synthdef: "test_map3" }).init({
+      head: 0,
+      params: {
+        param: bus,
+        param2: audio,
+      },
+    });
+
+    const group0 = await queryTree(0);
+
+    expect((group0.nodes[0] as SynthNode).controls["param"]).toBe(`c${bus.id}`);
+    expect((group0.nodes[0] as SynthNode).controls["param2"]).toBe(
+      `a${audio.id}`
+    );
+  });
+
+  it("Should be able to set audio buffer as param", async () => {
+    await SendSCCommand(
+      's.dumpOSC(2);SynthDef("test_map3",{|param=2,param2=3| 0 }).add;Routine{	1.wait; ("SCServer" + [] + "SCServer").postln;}.play;'
+    );
+
+    const audio = new SCAudioBus({ id: 2 });
+
+    const synth = await new SCSynth({ synthdef: "test_map3" }).init({
+      head: 0,
+    });
+    await synth.set({
+      params: {
+        param: audio,
+      },
+    });
+
+    const group0 = await queryTree(0);
+
+    expect((group0.nodes[0] as SynthNode).controls["param"]).toBe(
+      `a${audio.id}`
+    );
+  });
 });

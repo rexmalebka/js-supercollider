@@ -4,6 +4,12 @@ import { OSCClientOpts } from "../types/OSCClient";
 import { SCPosition, SCSynthOpts } from "../types/SCSynth";
 import { SCGroup } from "../SCGroups/SCGroups";
 import { SCControlBus } from "../SCControlBus/SCControlBus";
+import {
+  determineAction,
+  determineParamSetMsg,
+  determineTarget,
+} from "../oscUtils";
+import { SCAudioBus } from "../SCAudioBus/SCAudioBus";
 
 /**
  * Error thrown when a referenced synth cannot be found on the server
@@ -128,9 +134,9 @@ class SCSynth {
 
     this.synthdef = opts.synthdef ?? null;
     this.id = opts.id ?? null;
-    this.action = this.determineAction(opts);
+    this.action = determineAction(opts);
 
-    this.target = this.determineTarget(opts);
+    this.target = determineTarget(opts) as number | SCSynth | SCGroup;
 
     if (
       (this.target instanceof SCGroup || this.target instanceof SCSynth) &&
@@ -140,67 +146,6 @@ class SCSynth {
     }
 
     this.params = opts.params ?? {};
-  }
-
-  private determineAction(opts: any): number {
-    if (!opts) return 0;
-    if ("head" in opts) return 0;
-    if ("tail" in opts) return 1;
-    if ("before" in opts) return 2;
-    if ("after" in opts) return 3;
-    if ("replace" in opts) return 4;
-    return 0;
-  }
-
-  private determineTarget(opts: any): number | SCSynth | SCGroup {
-    if (!opts) return 0;
-    if ("head" in opts) return opts.head;
-    if ("tail" in opts) return opts.tail;
-    if ("before" in opts) return opts.before;
-    if ("after" in opts) return opts.after;
-    if ("replace" in opts) return opts.replace;
-    return 0;
-  }
-
-  private generateParamsMsg(
-    params:
-      | { [name: string]: number | string | SCControlBus }
-      | (number | string | SCControlBus)[]
-  ): { scalarArgs: OscMessage["args"]; mapArgs: OscMessage["args"] } {
-    // Separate regular params and bus mappings
-    const scalarArgs: OscMessage["args"] = [];
-    const mapArgs: OscMessage["args"] = [];
-
-    Object.entries(params).forEach(([name, param]) => {
-      if (param instanceof SCControlBus) {
-        mapArgs.push(
-          {
-            type: isNaN(Number(name)) ? "s" : "f",
-            value: isNaN(Number(name)) ? name : Number(name),
-          },
-          {
-            type: "s",
-            value: param.id,
-          }
-        );
-      } else {
-        scalarArgs.push(
-          {
-            type: isNaN(Number(name)) ? "s" : "i",
-            value: isNaN(Number(name)) ? name : Number(name),
-          },
-          {
-            type: isNaN(Number(param)) ? "s" : "f",
-            value: param,
-          }
-        );
-      }
-    });
-
-    return {
-      scalarArgs,
-      mapArgs,
-    };
   }
 
   /**
@@ -270,7 +215,9 @@ class SCSynth {
   async set(
     opts: {
       params:
-        | { [name: string]: number | string | SCControlBus }
+        | {
+            [name: string]: number | string | SCControlBus | SCAudioBus;
+          }
         | (number | string | SCControlBus)[];
     } & OSCClientOpts
   ): Promise<void> {
@@ -281,7 +228,8 @@ class SCSynth {
     const client = opts?.client ?? new OSCClient();
     const params = opts.params;
 
-    const { scalarArgs, mapArgs } = this.generateParamsMsg(params);
+    const { scalarMsg, controlBusMsg, audioBusMsg } =
+      determineParamSetMsg(params);
 
     try {
       const msgScalar = {
@@ -291,11 +239,11 @@ class SCSynth {
             type: "i",
             value: this.id,
           },
-          ...scalarArgs,
+          ...scalarMsg,
         ],
       };
 
-      await client.send(msgScalar as OscMessage);
+      if (scalarMsg.length > 0) await client.send(msgScalar as OscMessage);
 
       const msgBusData = {
         address: "/n_map",
@@ -304,11 +252,25 @@ class SCSynth {
             type: "i",
             value: this.id,
           },
-          ...mapArgs,
+          ...controlBusMsg,
         ],
       };
 
-      await client.send(msgBusData as OscMessage);
+      if (controlBusMsg.length > 0) await client.send(msgBusData as OscMessage);
+
+      const msgAudioBusData = {
+        address: "/n_mapa",
+        args: [
+          {
+            type: "i",
+            value: this.id,
+          },
+          ...audioBusMsg,
+        ],
+      };
+
+      if (audioBusMsg.length > 0)
+        await client.send(msgAudioBusData as OscMessage);
     } finally {
       if (!opts?.client) {
         client.client.close();
@@ -333,18 +295,18 @@ class SCSynth {
   async init(
     opts?: OSCClientOpts & {
       params?:
-        | { [name: string]: number | string | SCControlBus }
-        | (number | string | SCControlBus)[];
+        | { [name: string]: number | string | SCControlBus | SCAudioBus }
+        | (number | string | SCControlBus | SCAudioBus)[];
     } & SCPosition
   ): Promise<SCSynth> {
     if (this.id != null) return this;
 
     const client = opts?.client ?? new OSCClient();
 
-    this.action = this.determineAction(opts);
-    this.target = this.determineTarget(opts);
+    this.action = determineAction(opts);
+    this.target = determineTarget(opts) as number | SCSynth | SCGroup;
 
-    const params = opts?.params ?? [];
+    const params = opts?.params ?? {};
 
     try {
       let synthId = 1000; // Start searching from this ID
@@ -366,7 +328,16 @@ class SCSynth {
           ? this.target.id
           : this.target;
 
-      const { scalarArgs, mapArgs } = this.generateParamsMsg(params);
+      let { scalarMsg, controlBusMsg, audioBusMsg } =
+        determineParamSetMsg(params);
+
+      controlBusMsg = controlBusMsg.map((cb, i) =>
+        i % 2 == 1 ? { type: "s", value: `c${(cb as OscValue).value}` } : cb
+      );
+      audioBusMsg = audioBusMsg.map((ab, i) =>
+        i % 2 == 1 ? { type: "s", value: `a${(ab as OscValue).value}` } : ab
+      );
+
       await client.send({
         address: "/s_new",
         args: [
@@ -374,7 +345,9 @@ class SCSynth {
           { type: "i", value: this.id },
           { type: "i", value: this.action },
           { type: "i", value: target_id },
-          ...scalarArgs,
+          ...scalarMsg,
+          ...controlBusMsg,
+          ...audioBusMsg,
         ],
       });
     } finally {

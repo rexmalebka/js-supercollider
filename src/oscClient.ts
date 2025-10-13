@@ -73,11 +73,7 @@ class OSCClient {
 
       const timeId = setTimeout(() => {
         this.client.off("message", handler);
-        reject(
-          new Error(
-            `No response for "${expectedAddress} and addr ${msg.address}"`
-          )
-        );
+        reject(new Error(`No response for "${expectedAddress}"`));
       }, timeout);
 
       this.client.on("message", handler);

@@ -11,6 +11,7 @@ import {
 } from "../types/SCGroups";
 import { SCSynth } from "../SCSynths/SCSynth";
 import { SCControlBus } from "../SCControlBus/SCControlBus";
+import { determineAction, determineTarget } from "../oscUtils";
 
 function readSynth(
   args: (number | string)[],
@@ -155,31 +156,9 @@ class SCGroup {
    */
   constructor(opts?: SCGroupOpts) {
     this.id = opts?.id ?? null;
-    this.action =
-      "head" in (opts ?? {})
-        ? 0
-        : "tail" in (opts ?? {})
-        ? 1
-        : "before" in (opts ?? {})
-        ? 2
-        : "after" in (opts ?? {})
-        ? 3
-        : "replace" in (opts ?? {})
-        ? 4
-        : 0;
+    this.action = determineAction(opts);
 
-    this.target =
-      "head" in (opts ?? {})
-        ? opts["head"]
-        : "tail" in (opts ?? {})
-        ? opts["tail"]
-        : "before" in (opts ?? {})
-        ? opts["before"]
-        : "after" in (opts ?? {})
-        ? opts["after"]
-        : "replace" in (opts ?? {})
-        ? opts["replace"]
-        : 0;
+    this.target = determineTarget(opts) as number | SCSynth | SCGroup;
 
     if (
       (this.target instanceof SCGroup || this.target instanceof SCSynth) &&
@@ -201,31 +180,9 @@ class SCGroup {
 
     const client = opts?.client ?? new OSCClient();
 
-    this.action =
-      "head" in (opts ?? {})
-        ? 0
-        : "tail" in (opts ?? {})
-        ? 1
-        : "before" in (opts ?? {})
-        ? 2
-        : "after" in (opts ?? {})
-        ? 3
-        : "replace" in (opts ?? {})
-        ? 4
-        : 0;
+    this.action = determineAction(opts);
 
-    this.target =
-      "head" in (opts ?? {})
-        ? opts["head"]
-        : "tail" in (opts ?? {})
-        ? opts["tail"]
-        : "before" in (opts ?? {})
-        ? opts["before"]
-        : "after" in (opts ?? {})
-        ? opts["after"]
-        : "replace" in (opts ?? {})
-        ? opts["replace"]
-        : 0;
+    this.target = determineTarget(opts) as number | SCSynth | SCGroup;
 
     try {
       const group0 = await queryTree(0, { client });
@@ -352,27 +309,9 @@ class SCGroup {
     )
       return null;
 
-    const action =
-      "head" in (opts ?? {})
-        ? 0
-        : "tail" in (opts ?? {})
-        ? 1
-        : "before" in (opts ?? {})
-        ? 2
-        : "after" in (opts ?? {})
-        ? 3
-        : 0;
+    const action = determineAction(opts);
 
-    const targets =
-      "head" in (opts ?? {})
-        ? (opts["head"] as (SCSynth | SCGroup | number)[])
-        : "tail" in (opts ?? {})
-        ? (opts["tail"] as (SCSynth | SCGroup | number)[])
-        : "before" in (opts ?? {})
-        ? (opts["before"] as (SCSynth | SCGroup | number)[])
-        : "after" in (opts ?? {})
-        ? (opts["after"] as (SCSynth | SCGroup | number)[])
-        : [];
+    const targets = determineTarget(opts) as (number | SCSynth | SCGroup)[];
 
     const client = opts?.client ?? new OSCClient();
 
