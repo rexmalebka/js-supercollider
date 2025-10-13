@@ -11,7 +11,8 @@
   "license": "ISC",
   "dependencies": {
     "@types/node": "^22.14.0",
-    "osc": "^2.4.5"
+    "osc": "^2.4.5",
+    "wav-encoder": "^1.3.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

@@ -196,7 +196,11 @@ class SCBuffer {
    * @param {number} [opts.allocate.frames] - number of frames to allocate
    * @public
    */
-  allocate: null | { channels: number; frames: number };
+  allocate: null | {
+    channels: number | number[];
+    frames: number;
+    startFrame: number;
+  };
 
   /**
    * Creates a new SCBuffer instance
@@ -205,8 +209,9 @@ class SCBuffer {
    * @param {string} [opts.path] - path of audio file
    * @param {number} [opts.id] - Existing synth ID to reference
    * @param {Object} [opts.allocate] - Allocation options
-   * @param {number} [opts.allocate.channels] - Allocation channels
+   * @param {number|number[]} [opts.allocate.channels] - Channel to allocate or list of channel indexes.
    * @param {number} [opts.allocate.frames] - Frames to allocate
+   * @param {number} [opts.allocate.startFrame] - Starting frame to allocate
    * @throws {SCBufferInvalidError} If neither path, id or allocate is provided
    */
   constructor(opts: SCBufferOpts) {
@@ -218,15 +223,17 @@ class SCBuffer {
       throw new SCBufferInvalidError();
     }
 
+    if (opts?.path && !fs.existsSync(opts?.path)) {
+      throw new SCBufferPathNotFound(opts?.path);
+    }
+
     this.path = opts?.path ?? null;
     this.id = opts?.id ?? null;
-    this.allocate =
-      opts?.allocate == undefined
-        ? null
-        : {
-            channels: opts.allocate?.channels ?? 1,
-            frames: opts.allocate?.frames ?? 0,
-          };
+    this.allocate = {
+      channels: opts.allocate?.channels ?? undefined,
+      frames: opts.allocate?.frames ?? 0,
+      startFrame: opts?.path ? opts.allocate?.startFrame ?? 0 : undefined,
+    };
   }
 
   /**
@@ -240,104 +247,94 @@ class SCBuffer {
    * @throws {SCBufferPathNotFound} Path is not found
    */
   async init(opts?: OSCClientOpts & { data: number[] }) {
-    if (this.id != null) return this;
+    /**
+     * - create a buffer with zeroes
+     *    -should have an id and allocate channel and
+     * - create a buffer out of a path
+     *    - a path, could have allocate
+     * - refer to an existing id buffer
+     *    - only an id
+     */
 
-    if (!fs.existsSync(this.path)) {
-      throw new SCBufferPathNotFound(this.path);
+    const client = opts?.client ?? new OSCClient();
+
+    if (!this.id) {
+      this.id = await findFreeBufferBlock({ client });
     }
 
+    try {
+      if (this.path) return await this.readFromFile(client);
+      if (!this.path) return await this.allocateBuffer(client, opts.data);
+    } finally {
+      if (!opts?.client) {
+        client.client.close();
+      }
+    }
+
+    return this;
+  }
+
+  private async readFromFile(client: OSCClient): Promise<SCBuffer> {
     const ext = path.extname(this.path).toLowerCase();
 
     this.path = SUPPORTED_FORMATS.includes(ext)
       ? this.path
       : await convertToWav(this.path);
 
-    const client = opts?.client ?? new OSCClient();
-
-    if (opts?.data) {
-      try {
-        const id = await findFreeBufferBlock({ client });
-        const data = opts?.data ?? [];
-
-        await client.request(
-          {
-            address: "/b_alloc",
-            args: [
-              {
-                type: "i",
-                value: id,
-              },
-              {
-                type: "i",
-                value: this?.allocate.frames,
-              },
-              {
-                type: "i",
-                value: this?.allocate?.channels,
-              },
-            ],
-          },
-          ["/done"]
-        );
-
-        await client.request(
-          {
-            address: "/b_setn",
-            args: [
-              {
-                type: "i",
-                value: id,
-              },
-              {
-                type: "i",
-                value: 0,
-              },
-              {
-                type: "i",
-                value: data.length,
-              },
-              ...(data.map((sample) => ({
-                type: "f",
-                value: sample,
-              })) as OscMessage["args"]),
-            ],
-          },
-          ["/done"]
-        );
-
-        this.id = id;
-        return this;
-      } finally {
-        if (!opts?.client) {
-          client.client.close();
-        }
-      }
+    if (!this.allocate?.channels) {
+      this.allocate.channels = await getAudioChannels(this.path);
     }
 
-    try {
-      const id = await findFreeBufferBlock({ client });
+    await client.request(
+      {
+        address: "/b_allocReadChannel",
+        args: [
+          { type: "i", value: this.id },
+          {
+            type: "s",
+            value: this.path,
+          },
+          {
+            type: "i",
+            value: this.allocate.startFrame ?? 0,
+          },
+          {
+            type: "i",
+            value: this.allocate.frames ?? 0,
+          },
+          ...(Array.isArray(this.allocate.channels)
+            ? this.allocate.channels
+            : Array.from({ length: this.allocate.channels }).map((_, i) => i)
+          ).map((chan) => ({ type: "i", value: chan } as OscValue)),
+        ],
+      },
+      ["/done"]
+    );
 
-      await client.request(
-        {
-          address: "/b_allocRead",
-          args: [
-            { type: "i", value: id },
-            {
-              type: "s",
-              value: this.path,
-            },
-          ],
-        },
-        ["/done"]
-      );
+    return this;
+  }
 
-      this.id = id;
-      return this;
-    } finally {
-      if (!opts?.client) {
-        client.client.close();
-      }
+  private async allocateBuffer(
+    client: OSCClient,
+    data: number[]
+  ): Promise<SCBuffer> {
+    await client.request(
+      {
+        address: "/b_alloc",
+        args: [
+          { type: "i", value: this.id },
+          { type: "i", value: this.allocate.frames },
+          { type: "i", value: this.allocate.channels },
+        ],
+      },
+      ["/done"]
+    );
+
+    if (data) {
+      await this.set({ data, client, from: 0 });
     }
+
+    return this;
   }
 
   /**
@@ -379,6 +376,70 @@ class SCBuffer {
     try {
       const buffer = await queryBuffer([this.id]);
       return buffer[0].frames;
+    } finally {
+      if (!opts?.client) {
+        client.client.close();
+      }
+    }
+  }
+
+  async set(opts: { data: number[]; from: number } & OSCClientOpts) {
+    const client = opts?.client ?? new OSCClient();
+
+    try {
+      await client.send({
+        address: "/b_setn",
+        args: [
+          { type: "i", value: this.id },
+          { type: "i", value: opts.from },
+          { type: "i", value: opts.data.length },
+          ...opts.data.map(
+            (dat) =>
+              ({
+                type: "f",
+                value: dat,
+              } as OscValue)
+          ),
+        ],
+      });
+
+      return this;
+    } finally {
+      if (!opts?.client) {
+        client.client.close();
+      }
+    }
+  }
+
+  async get(
+    opts: { index: number | number[] } & OSCClientOpts
+  ): Promise<number[]> {
+    const client = opts?.client ?? new OSCClient();
+
+    try {
+      const response = await client.request(
+        {
+          address: "/b_get",
+          args: [
+            { type: "i", value: this.id },
+            ...(Array.isArray(opts.index) ? opts.index : [opts.index]).map(
+              (i) =>
+                ({
+                  type: "i",
+                  value: i,
+                } as OscValue)
+            ),
+          ],
+        },
+        ["/b_set"]
+      );
+
+      const samples = [];
+      for (let k = 2; k < response.args.length; k += 2) {
+        samples.push((response.args[k] as OscValue).value);
+      }
+
+      return samples;
     } finally {
       if (!opts?.client) {
         client.client.close();
