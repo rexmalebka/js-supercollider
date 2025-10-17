@@ -1,11 +1,22 @@
 import { SCUgen } from "../SCUgens/SCUgen";
 
-type SCUgenParam = number | SCUgen<any> 
+type SCUgenParam = number | SCUgen<any> | (number | SCUgen<any>)[];
 type SCUgenRate = "ar" | "kr" | "ir";
 type ParamOrderFn<T extends Record<string, SCUgenParam>> = (
   params: T
 ) => SCUgenParam[];
 
+interface SCUGenGraphInput {
+  type: "const" | "ugen";
+  index: number;
+  output?: number;
+}
+
+interface SCUGenGraphNode {
+  name: string;
+  rate: SCUgenRate;
+  inputs: SCUGenGraphInput[];
+}
 
 // import type { SCBuffer } from "../SCBuffers/SCBuffer";
 

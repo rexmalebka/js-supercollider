@@ -1,4 +1,4 @@
-import { serializeUGenGraph } from "../src/SCUgens/SCUgen";
+import { serializeUGenGraph } from "../src/SCGraph/SCGraph";
 import { Pulse, Saw, SinOsc } from "../src/SCUgens/sources/oscilators";
 
 describe("SCUgen test", () => {
@@ -43,11 +43,11 @@ describe("SCUgen test", () => {
     expect(occurrences).toBe(1);
   });
 
-  //   it("Should throw on invalid parameter types", () => {
-  //     expect(() => {
-  //       SinOsc({ freq: "not-a-number" as any });
-  //     }).toThrow();
-  //   });
+  it("Should throw on invalid parameter types", () => {
+    expect(() => {
+      SinOsc({ freq: "not-a-number" as any });
+    }).toThrow();
+  });
 
   it("Should not wrap in MulAdd when mul=1 and add=0", () => {
     const osc = SinOsc({ freq: 440, mul: 1, add: 0 });
@@ -87,5 +87,33 @@ describe("SCUgen test", () => {
     );
     expect(ugens[ugens.length - 1].name).toBe("SinOsc");
     expect(ugens.length).toBe(4);
+  });
+
+  it("Should be able to handle multichannel expansion", () => {
+    const osc = SinOsc({ freq: [200, 300], phase: [0, 0.2, 0.6] });
+
+    expect(osc.length).toBe(3);
+    expect(osc[0].collectParams()).toEqual([200, 0]);
+    expect(osc[1].collectParams()).toEqual([300, 0.2]);
+    expect(osc[2].collectParams()).toEqual([200, 0.6]);
+  });
+
+  it("Should be able to combine  array and single parameters", () => {
+    const osc = SinOsc({ freq: [100, 200, 300], phase: 0 });
+
+    expect(osc).toHaveLength(3);
+  });
+
+  it("Should be able to use kr with multichannel", () => {
+    const osc = SinOsc({ freq: [20, 10] }, { rate: "kr" });
+
+    expect(osc).toHaveLength(2);
+    expect(osc[0].rate).toBe("kr");
+    expect(osc[1].rate).toBe("kr");
+  });
+  it("Should handle empty input gracefully", () => {
+    const result = serializeUGenGraph([]);
+    expect(result.constants).toEqual([]);
+    expect(result.ugens).toEqual([]);
   });
 });

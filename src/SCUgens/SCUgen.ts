@@ -1,6 +1,116 @@
 import { ParamOrderFn, SCUgenParam, SCUgenRate } from "../types/SCUgen";
 import { MulAdd } from "./misc/math";
 
+/**
+ * Checks whether a value is a valid SCUgen parameter.
+ * Valid types: number, SCUgen instance, or object with a 'ugen' key.
+ * @param p - The value to validate.
+ * @returns True if valid, false otherwise.
+ */
+function isValidParam(p: any): boolean {
+  return (
+    typeof p === "number" ||
+    p instanceof SCUgen ||
+    (typeof p === "object" && "ugen" in p)
+  );
+}
+
+/**
+ * Expands multichannel parameters by broadcasting shorter arrays.
+ * Returns an array of parameter sets for each channel.
+ * @template T - The shape of the parameter object.
+ * @param params - The input parameter object.
+ * @returns An array of expanded parameter objects.
+ */
+export function expandParams<T extends Record<string, SCUgenParam>>(
+  params: T
+): T[] {
+  const keys = Object.keys(params);
+  const arrayLengths = keys
+    .map((k) => (Array.isArray(params[k]) ? (params[k] as any[]).length : null))
+    .filter(Boolean) as number[];
+
+  if (arrayLengths.length === 0) return [params]; // mono case
+
+  const maxLen = Math.max(...arrayLengths);
+  const expanded: T[] = [];
+
+  for (let i = 0; i < maxLen; i++) {
+    const expandedParams: any = {};
+    for (const key of keys) {
+      const val = params[key];
+      expandedParams[key] = Array.isArray(val)
+        ? val[i % val.length] // broadcast shorter arrays
+        : val;
+    }
+    expanded.push(expandedParams);
+  }
+
+  return expanded;
+}
+
+/**
+ * Creates a builder function for a specific UGen type.
+ * Handles default parameters, multichannel expansion, and optional mul/add wrapping.
+ * @template T - The shape of the default parameter object.
+ * @param name - The name of the UGen.
+ * @param defaultParams - Default values for the UGen's parameters.
+ * @param paramOrderFn - Function to determine parameter ordering for serialization.
+ * @returns A UGen factory function.
+ */
+function generateSCUgenBuilder<T extends Record<string, number>>(
+  name: string,
+  defaultParams: T,
+  paramOrderFn: ParamOrderFn<T>
+) {
+  function wrapper(
+    params?: Partial<
+      Record<keyof T, SCUgenParam> & {
+        mul?: SCUgenParam;
+        add?: SCUgenParam;
+      }
+    >,
+    opts?: {
+      rate?: SCUgenRate;
+    }
+  ) {
+    const mergedParams = { ...defaultParams, ...params } as Record<
+      keyof T,
+      SCUgenParam
+    >;
+
+    for (const [key, value] of Object.entries(params)) {
+      const values = Array.isArray(value) ? value : [value];
+
+      values.forEach((v) => {
+        if (!isValidParam(v)) {
+          throw new SCUgenInvalidParam(v);
+        }
+      });
+
+      mergedParams[key as keyof T] = values;
+    }
+
+    const expansions = expandParams(mergedParams);
+
+    const results = expansions.map((p) => {
+      const ugen = new SCUgen(name, p as any, paramOrderFn, opts?.rate ?? "ar");
+      const mul = name !== "MulAdd" ? params?.mul ?? 1 : 1;
+      const add = name !== "MulAdd" ? params?.add ?? 0 : 0;
+
+      // If mul/add, wrap in MulAdd
+      return mul != 1 || add != 0 ? MulAdd({ in: ugen, mul, add }) : ugen;
+    });
+    return results.length === 1 ? results[0] : results;
+  }
+
+  return wrapper;
+}
+
+/**
+ * Represents a SuperCollider-style unit generator (UGen).
+ * @template T - The shape of the parameter object.
+ */
 class SCUgen<T extends Record<string, SCUgenParam>> {
   public name: string;
   public rate: SCUgenRate;
@@ -37,140 +147,13 @@ class SCUgen<T extends Record<string, SCUgenParam>> {
   }
 }
 
-function generateSCUgenBuilder<T extends Record<string, number>>(
-  name: string,
-  defaultParams: T,
-  paramOrderFn: ParamOrderFn<T>
-) {
-  function wrapper(
-    params?: Partial<
-      Record<keyof T, SCUgenParam> &
-        Record<"mul", SCUgenParam> &
-        Record<"add", SCUgenParam>
-    >
-  ) {
-    const ugenParams: Record<keyof T, SCUgenParam> = defaultParams;
-
-    const mul = name != "MulAdd" ? params.mul ?? 1 : 1;
-    const add = name != "MulAdd" ? params.add ?? 0 : 0;
-
-    Object.entries(defaultParams).forEach(([name, _]) => {
-      if (params && params[name]) {
-        ugenParams[name as keyof T] = params[name] as SCUgenParam;
-      }
-    });
-
-    const ugen =
-      mul != 1 || add != 0
-        ? MulAdd({
-            in: new SCUgen(name, { ...ugenParams } as T, paramOrderFn),
-            mul,
-            add,
-          })
-        : new SCUgen(name, { ...ugenParams } as T, paramOrderFn);
-
-    return ugen;
+export class SCUgenInvalidParam extends Error {
+  constructor(v: any) {
+    super(`Invalid parameter: ${v}`);
   }
-
-  return wrapper;
 }
 
-function collectUGenGraph(root: SCUgen<any>) {
-  const visited = new Set<SCUgen<any>>();
-  const orderedUGens: SCUgen<any>[] = [];
-  const constants = new Set<number>();
-
-  function traverse(node: SCUgen<any>) {
-    if (visited.has(node)) return;
-    visited.add(node);
-
-    const params = node.collectParams();
-
-    for (const param of params) {
-      if (param instanceof SCUgen) {
-        traverse(param); // visit dependencies first
-      } else {
-        constants.add(param);
-      }
-    }
-
-    // add node itself after dependencies
-    orderedUGens.push(node);
-  }
-
-  traverse(root);
-
-  return {
-    orderedUGens,
-    constants: Array.from(constants),
-  };
-}
-
-function indexUGensAndConstants(
-  orderedUGens: SCUgen<any>[],
-  constants: number[]
-) {
-  // constants get indexes starting from 0
-  const constantIndex = new Map<number, number>();
-  constants.forEach((c, i) => constantIndex.set(c, i));
-
-  // UGens get indexes starting after constants
-  const ugenIndex = new Map<SCUgen<any>, number>();
-  orderedUGens.forEach((u, i) => ugenIndex.set(u, i));
-
-  return { constantIndex, ugenIndex };
-}
-
-function buildUGenConnections(
-  orderedUGens: SCUgen<any>[],
-  constantIndex: Map<number, number>,
-  ugenIndex: Map<SCUgen<any>, number>
-) {
-  const graph: any[] = [];
-
-  for (const ugen of orderedUGens) {
-    const params = ugen.collectParams();
-
-    const inputs = params.map((param) => {
-      if (param instanceof SCUgen) {
-        return {
-          type: "ugen",
-          index: ugenIndex.get(param)!,
-          output: 0,
-        };
-      } else {
-        return {
-          type: "const",
-          index: constantIndex.get(param)!,
-        };
-      }
-    });
-
-    graph.push({
-      name: ugen.name,
-      rate: ugen.rate,
-      inputs,
-    });
-  }
-
-  return graph;
-}
-
-function serializeUGenGraph(root: SCUgen<any>) {
-  const { orderedUGens, constants } = collectUGenGraph(root);
-  const { constantIndex, ugenIndex } = indexUGensAndConstants(
-    orderedUGens,
-    constants
-  );
-  const graph = buildUGenConnections(orderedUGens, constantIndex, ugenIndex);
-
-  return {
-    constants,
-    ugens: graph,
-  };
-}
-
-export { generateSCUgenBuilder, serializeUGenGraph, SCUgen };
+export { generateSCUgenBuilder, SCUgen };
 
 // const SinOsc = generateSCUgenBuilder("SinOsc", {param:"freq", default:440}, {param:"phase", default:440});
 
