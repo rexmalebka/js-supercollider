@@ -5,30 +5,27 @@ export type SCBufferInfo = {
   sampleRate: number;
 };
 
+type SCBufferReference = {
+  id: number; // must exist
+};
+
+type SCBufferFromData = {
+  id?: number; // may use existing or create new
+  data: number[]; // must exist
+  channels?: number | number[];
+  frames?: number;
+  startFrame?: number;
+};
+
+type SCBufferFromFile = {
+  id?: number; // may use existing or create new
+  path: string; // must exist
+  channels?: number;
+  frames?: number;
+  startFrame?: number;
+};
+
 export type SCBufferOpts =
-  | {
-      // Read from a path
-      path: string;
-      id?: number;
-      allocate?: {
-        channels?: number | number[];
-        startFrame?: number;
-        frames?: number;
-      };
-    }
-  | {
-      // 2️⃣ Reference existing buffer
-      id: number;
-      path?: never;
-      allocate?: never;
-    }
-  | {
-      // 3️⃣ Allocate new empty buffer
-      allocate: {
-        channels: number;
-        frames: number;
-        startFrame?: number;
-      };
-      id?: number;
-      path?: never;
-    };
+  | SCBufferReference
+  | SCBufferFromData
+  | SCBufferFromFile;

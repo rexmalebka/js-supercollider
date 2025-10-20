@@ -79,7 +79,7 @@ function generateSCUgenBuilder<T extends Record<string, number>>(
       SCUgenParam
     >;
 
-    for (const [key, value] of Object.entries(params)) {
+    for (const [key, value] of Object.entries(params ?? {})) {
       const values = Array.isArray(value) ? value : [value];
 
       values.forEach((v) => {
@@ -93,7 +93,7 @@ function generateSCUgenBuilder<T extends Record<string, number>>(
 
     const expansions = expandParams(mergedParams);
 
-    const results = expansions.map((p) => {
+    const results: any[] = expansions.map((p) => {
       const ugen = new SCUgen(name, p as any, paramOrderFn, opts?.rate ?? "ar");
       const mul = name !== "MulAdd" ? params?.mul ?? 1 : 1;
       const add = name !== "MulAdd" ? params?.add ?? 0 : 0;
@@ -117,12 +117,14 @@ class SCUgen<T extends Record<string, SCUgenParam>> {
   public params: T;
   public specialIndex: number;
   private paramOrderFn: ParamOrderFn<T>;
+  public outputs: number;
 
   constructor(
     name: string,
     params: T,
     paramOrderFn: ParamOrderFn<T>,
-    rate?: SCUgenRate
+    rate?: SCUgenRate,
+    outputs?: number
   ) {
     this.name = name;
     this.rate = rate ?? "ar";
@@ -130,6 +132,7 @@ class SCUgen<T extends Record<string, SCUgenParam>> {
     this.specialIndex = 0;
 
     this.paramOrderFn = paramOrderFn;
+    this.outputs = outputs ?? 1;
   }
 
   kr(): SCUgen<T> {

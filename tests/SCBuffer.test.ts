@@ -18,7 +18,7 @@ const getSClang = (): Promise<ChildProcessWithoutNullStreams> => {
       rej(err);
     });
 
-    const wait_interpreter = (data) => {
+    const wait_interpreter = (data: any) => {
       const line: string = data.toString();
 
       if (!started && line.startsWith("sc3>")) {
@@ -37,7 +37,7 @@ function SendSCCommand(cmd: string) {
   proc.stdin.write(`${cmd}\n`);
 
   return new Promise((res, rej) => {
-    const waitMsg = (data) => {
+    const waitMsg = (data: any) => {
       const line: string = data.toString();
       const match = line.match(/SCServer (?<status>.*) SCServer/);
 
@@ -177,7 +177,7 @@ describe("SCBuffer tests", () => {
   it("Should load a buffer from path", async () => {
     const buffer = await new SCBuffer({
       path: oneChannelBufferFilePath,
-      allocate: { channels: 1 },
+      channels: 1,
     }).init();
 
     const samplerate = await buffer.getSampleRate();
@@ -190,7 +190,7 @@ describe("SCBuffer tests", () => {
 
     const buffer2 = await new SCBuffer({
       path: twoChannelBufferFilePath,
-      allocate: { channels: 2 },
+      channels: 2,
     }).init();
 
     const samplerate2 = await buffer2.getSampleRate();
@@ -201,7 +201,7 @@ describe("SCBuffer tests", () => {
     expect(channels2).toBe(2);
     expect(numFrames2 / samplerate2).toBeCloseTo(2.5);
 
-    expect(buffer2.id - buffer.id).toBe(1);
+    expect((buffer2.id as number) - (buffer.id as number)).toBe(1);
   });
 
   it("Should throw error if path does not exists", async () => {
@@ -267,7 +267,9 @@ describe("SCBuffer tests", () => {
 
   it("Should allocate an empty buffer", async () => {
     const buffer = await new SCBuffer({
-      allocate: { channels: 2, frames: 20 },
+      channels: 2,
+      frames: 20,
+      data: [],
     }).init({ data: [1, 2, 3, 4, 5, 6, 7] });
 
     const frames = await buffer.getFrames();
@@ -283,7 +285,9 @@ describe("SCBuffer tests", () => {
 
   it("Should be able to set new values", async () => {
     const buffer = await new SCBuffer({
-      allocate: { channels: 2, frames: 20 },
+      channels: 2,
+      frames: 20,
+      data: [],
     }).init({ data: [1, 2, 3, 4, 5, 6, 7] });
 
     await buffer.set({ data: [6], from: 0 });

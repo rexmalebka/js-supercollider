@@ -1,4 +1,4 @@
-import { generateSCUgenBuilder } from "../SCUgen";
+import { generateSCUgenBuilder, SCUgen } from "../SCUgen";
 
 export const SinOsc = generateSCUgenBuilder(
   "SinOsc",

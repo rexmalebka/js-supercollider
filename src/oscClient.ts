@@ -60,9 +60,13 @@ class OSCClient {
     expectedAddress: string[],
     timeout = 5000
   ): Promise<osc.OscMessage> {
-    if ((await this.ready) == false) return;
+    if ((await this.ready) == false) {
+      return new Promise((resolve, reject) =>
+        reject(new Error(`No response for "${expectedAddress}"`))
+      );
+    }
 
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       const handler = (incoming: osc.OscMessage) => {
         if (expectedAddress.includes(incoming.address)) {
           clearTimeout(timeId);
