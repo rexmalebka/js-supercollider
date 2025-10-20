@@ -1,3 +1,4 @@
+import { OscValue } from "osc";
 import OSCClient from "../oscClient";
 import { OSCClientOpts } from "../types/OSCClient";
 
@@ -29,14 +30,16 @@ const status = async (opts?: OSCClientOpts): Promise<StatusResponse> => {
       samplerate,
       actualSamplerate,
     ] = (
-      await client.request(
-        {
-          address: "/status",
-        },
-        ["/status.reply"],
-        opts?.timeout
-      )
-    ).args.map((arg) => arg["value"]);
+      (
+        await client.request(
+          {
+            address: "/status",
+          },
+          ["/status.reply"],
+          opts?.timeout
+        )
+      ).args ?? []
+    ).map((arg) => (arg as OscValue)["value"]);
 
     return {
       ugens,
@@ -67,14 +70,16 @@ const version = async (opts?: OSCClientOpts): Promise<VersionResponse> => {
 
   try {
     const [program, major, minor, patch, gitBranch, hash] = (
-      await client.request(
-        {
-          address: "/version",
-        },
-        ["/version.reply"],
-        opts?.timeout
-      )
-    ).args.map((arg) => arg["value"]);
+      (
+        await client.request(
+          {
+            address: "/version",
+          },
+          ["/version.reply"],
+          opts?.timeout
+        )
+      ).args ?? []
+    ).map((arg) => (arg as OscValue)["value"]);
 
     return {
       program: program as "scsynth" | "supernova",

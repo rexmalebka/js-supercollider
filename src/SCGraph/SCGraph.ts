@@ -1,5 +1,6 @@
+import { Out } from "../SCUgens/misc/out";
 import { SCUgen } from "../SCUgens/SCUgen";
-import { SCUGenGraphInput, SCUGenGraphNode } from "../types/SCUgen";
+import { SCUGenGraphInput, SCUGenGraphNode } from "../types/SCUgenGraph";
 
 /**
  * Flattens a value one level deep.
@@ -100,10 +101,17 @@ export function buildUGenConnections(
             : { type: "const", index: constantIndex.get(p)! }
       )
     );
+
+    const outputs = Array.from({ length: ugen.outputs }).map(() => ({
+      rate: ugen.rate,
+    }));
+
     graph.push({
       name: ugen.name,
       rate: ugen.rate,
       inputs,
+      outputs: outputs,
+      specialIndex: ugen.specialIndex,
     });
   }
 

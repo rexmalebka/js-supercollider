@@ -75,6 +75,7 @@ const querySynth = async function (
 
       return synth;
     }
+    return null;
   } finally {
     if (!opts?.client) {
       client.client.close();
@@ -160,7 +161,7 @@ class SCSynth {
   async get(
     property: number | string,
     opts?: OSCClientOpts
-  ): Promise<string | number> {
+  ): Promise<string | number | null> {
     if (!this.id) {
       return null;
     }
@@ -189,7 +190,7 @@ class SCSynth {
         throw new SCSynthNotFoundError(this.id);
       }
 
-      return (synthArg.args[2] as OscValue).value as number;
+      return ((synthArg.args ?? [])[2] as OscValue).value as number;
     } finally {
       if (!opts?.client) {
         client.client.close();
@@ -239,11 +240,12 @@ class SCSynth {
             type: "i",
             value: this.id,
           },
-          ...scalarMsg,
+          ...(scalarMsg ?? []),
         ],
       };
 
-      if (scalarMsg.length > 0) await client.send(msgScalar as OscMessage);
+      if ((scalarMsg ?? []).length > 0)
+        await client.send(msgScalar as OscMessage);
 
       const msgBusData = {
         address: "/n_map",
@@ -252,11 +254,12 @@ class SCSynth {
             type: "i",
             value: this.id,
           },
-          ...controlBusMsg,
+          ...(controlBusMsg ?? []),
         ],
       };
 
-      if (controlBusMsg.length > 0) await client.send(msgBusData as OscMessage);
+      if ((controlBusMsg ?? []).length > 0)
+        await client.send(msgBusData as OscMessage);
 
       const msgAudioBusData = {
         address: "/n_mapa",
@@ -265,11 +268,11 @@ class SCSynth {
             type: "i",
             value: this.id,
           },
-          ...audioBusMsg,
+          ...(audioBusMsg ?? []),
         ],
       };
 
-      if (audioBusMsg.length > 0)
+      if ((audioBusMsg ?? []).length > 0)
         await client.send(msgAudioBusData as OscMessage);
     } finally {
       if (!opts?.client) {
@@ -331,10 +334,10 @@ class SCSynth {
       let { scalarMsg, controlBusMsg, audioBusMsg } =
         determineParamSetMsg(params);
 
-      controlBusMsg = controlBusMsg.map((cb, i) =>
+      controlBusMsg = (controlBusMsg ?? []).map((cb, i) =>
         i % 2 == 1 ? { type: "s", value: `c${(cb as OscValue).value}` } : cb
       );
-      audioBusMsg = audioBusMsg.map((ab, i) =>
+      audioBusMsg = (audioBusMsg ?? []).map((ab, i) =>
         i % 2 == 1 ? { type: "s", value: `a${(ab as OscValue).value}` } : ab
       );
 
@@ -345,7 +348,7 @@ class SCSynth {
           { type: "i", value: this.id },
           { type: "i", value: this.action },
           { type: "i", value: target_id },
-          ...scalarMsg,
+          ...(scalarMsg ?? []),
           ...controlBusMsg,
           ...audioBusMsg,
         ],
