@@ -9,21 +9,20 @@ async function queryControlBus(
 ): Promise<number[]> {
   const client = opts?.client ?? new OSCClient();
 
+  const idArgs = ids.map((id) => ({
+    type: "i",
+    value: id,
+  }));
   try {
     const info = await client.request(
       {
         address: "/c_get",
-        args: [
-          ...(ids.map((id) => ({
-            type: "i",
-            value: id,
-          })) as OscMessage["args"]),
-        ],
+        args: idArgs as OscMessage["args"],
       },
       ["/c_set"]
     );
 
-    return info.args
+    return (info.args ?? [])
       .filter((arg, i) => i % 2 == 1)
       .map((arg) => (arg as { type: string; value: number }).value);
   } finally {
@@ -37,6 +36,11 @@ async function setControlBus(id: number, data: number[], opts?: OSCClientOpts) {
   const client = opts?.client ?? new OSCClient();
 
   try {
+    const dataArgs: OscMessage["args"] = data.map((d) => ({
+      type: "f",
+      value: d,
+    }));
+
     await client.send({
       address: "/c_setn",
       args: [
@@ -48,10 +52,7 @@ async function setControlBus(id: number, data: number[], opts?: OSCClientOpts) {
           type: "i",
           value: data.length,
         },
-        ...(data.map((d) => ({
-          type: "f",
-          value: d,
-        })) as OscMessage["args"]),
+        ...dataArgs,
       ],
     });
   } finally {
@@ -62,17 +63,20 @@ async function setControlBus(id: number, data: number[], opts?: OSCClientOpts) {
 }
 
 class SCControlBus {
-  id: number;
+  id: number | undefined;
   constructor(opts?: SCDataBusOpts) {
-    this.id = opts?.id ?? null;
+    this.id = opts?.id;
   }
 
   async get(count?: number, opts?: OSCClientOpts): Promise<number[]> {
-    if (this.id == null) return;
+    if (this.id == undefined)
+      return new Promise((resolve, reject) => resolve([]));
 
     const client = opts?.client ?? new OSCClient();
     try {
-      const ids = Array.from({ length: count ?? 1 }).map((_, i) => this.id + i);
+      const ids = Array.from({ length: count ?? 1 }).map(
+        (_, i) => (this.id ?? 0) + i
+      );
       return await queryControlBus(ids, { client });
     } finally {
       if (!opts?.client) {

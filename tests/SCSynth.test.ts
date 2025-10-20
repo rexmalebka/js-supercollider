@@ -15,7 +15,7 @@ const getSClang = (): Promise<ChildProcessWithoutNullStreams> => {
       rej(err);
     });
 
-    const wait_interpreter = (data) => {
+    const wait_interpreter = (data: any) => {
       const line: string = data.toString();
 
       if (!started && line.startsWith("sc3>")) {
@@ -208,7 +208,7 @@ describe("SCSynth tests", () => {
       'SynthDef("test",{|param=2,param2=3| 0 }).add;Routine{	var a;1.wait; a = Synth("test"); ("SCServer" + [a.nodeID] + "SCServer").postln;}.play;'
     );
 
-    const synth = new SCSynth({ id: SynthId[0] });
+    const synth = new SCSynth({ id: (SynthId as [number])[0] });
     const testParam1 = await synth.get("param");
     const testParam2 = await synth.get("param2");
 

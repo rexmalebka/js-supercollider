@@ -116,4 +116,4 @@ describe("SCUgen test", () => {
     expect(result.constants).toEqual([]);
     expect(result.ugens).toEqual([]);
   });
-});
+})

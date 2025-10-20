@@ -1,4 +1,4 @@
-import { OscMessage, OscValue } from "osc";
+import { OscMessage, OscType, OscValue } from "osc";
 import OSCClient from "../oscClient";
 import { OSCClientOpts } from "../types/OSCClient";
 import {
@@ -102,11 +102,11 @@ async function queryTree(
     );
 
     if (treeMsg.address == "/fail") {
-      return null;
+      throw new SCGroupError(`Operation failed querying group ${groupId}`);
     }
 
-    const treeArgs: (string | number)[] = treeMsg.args.map(
-      (arg: OscValue) => arg.value
+    const treeArgs: (string | number)[] = (treeMsg.args ?? []).map(
+      (arg) => (arg as OscValue).value
     );
 
     const [_valuesIncluded, _returnedGroupId, numChildNodes, ...remainingArgs] =
@@ -130,6 +130,12 @@ async function queryTree(
     if (!opts?.client) {
       client.client.close();
     }
+  }
+}
+
+class SCGroupError extends Error {
+  constructor(message: string) {
+    super(message);
   }
 }
 
@@ -230,7 +236,14 @@ class SCGroup {
 
       const group = await queryTree(this.id);
 
-      if (group == null) return null;
+      if (group == null)
+        return new Promise((resolve, reject) =>
+          reject(
+            new SCGroupError(
+              `Error creating new group ${this.id}} with action ${this.action} and target: ${target_id}`
+            )
+          )
+        );
     } finally {
       if (!opts?.client) {
         client.client.close();
@@ -244,7 +257,7 @@ class SCGroup {
    * @param opts - Options including optional custom OSC client
    */
   async free(opts?: OSCClientOpts): Promise<void> {
-    if (this.id == null) return null;
+    if (this.id == null) throw new SCGroupError(`No id provided`);
 
     const client = opts?.client ?? new OSCClient();
 
@@ -272,7 +285,7 @@ class SCGroup {
    * @param opts - Options including optional custom OSC client
    */
   async freeAll(opts?: OSCClientOpts): Promise<void> {
-    if (this.id == null) return null;
+    if (this.id == null) throw new SCGroupError(`No id provided`);
 
     const client = opts?.client ?? new OSCClient();
 
@@ -301,16 +314,7 @@ class SCGroup {
   async add(opts?: OSCClientOpts & SCPositionNodes): Promise<SCGroup> {
     if (this.id == null) return this;
 
-    if (
-      !("head" in opts) &&
-      !("tail" in opts) &&
-      !("before" in opts) &&
-      !("after" in opts)
-    )
-      return null;
-
     const action = determineAction(opts);
-
     const targets = determineTarget(opts) as (number | SCSynth | SCGroup)[];
 
     const client = opts?.client ?? new OSCClient();
@@ -329,6 +333,12 @@ class SCGroup {
         }
       }
 
+      const nodesArgs = nodes.map((node) => ({
+        type: "i" as OscType,
+        value:
+          node instanceof SCGroup || node instanceof SCSynth ? node.id : node,
+      }));
+
       await client.send({
         address: "/n_order",
         args: [
@@ -340,15 +350,10 @@ class SCGroup {
             type: "i",
             value: this.id,
           },
-          ...(nodes.map((node) => ({
-            type: "i",
-            value:
-              node instanceof SCGroup || node instanceof SCSynth
-                ? node.id
-                : node,
-          })) as OscMessage["args"]),
+          ...nodesArgs,
         ],
       });
+      return this;
     } finally {
       if (!opts?.client) {
         client.client.close();
@@ -486,7 +491,7 @@ class SCGroup {
       await client.send(
         {
           address: "/n_set",
-          args: [{ type: "i", value: this.id }, ...scalarArgs],
+          args: [{ type: "i", value: this.id }, ...(scalarArgs ?? [])],
         },
         opts?.timeout
       );
@@ -499,7 +504,7 @@ class SCGroup {
               type: "i",
               value: this.id,
             },
-            ...mapArgs,
+            ...(mapArgs ?? []),
           ],
         },
         opts?.timeout

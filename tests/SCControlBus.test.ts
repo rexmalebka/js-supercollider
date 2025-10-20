@@ -11,7 +11,7 @@ const getSClang = (): Promise<ChildProcessWithoutNullStreams> => {
       rej(err);
     });
 
-    const wait_interpreter = (data) => {
+    const wait_interpreter = (data:any) => {
       const line: string = data.toString();
 
       if (!started && line.startsWith("sc3>")) {
@@ -30,7 +30,7 @@ function SendSCCommand(cmd: string) {
   proc.stdin.write(`${cmd}\n`);
 
   return new Promise((res, rej) => {
-    const waitMsg = (data) => {
+    const waitMsg = (data:any) => {
       const line: string = data.toString();
       const match = line.match(/SCServer (?<status>.*) SCServer/);
 
